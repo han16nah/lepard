@@ -99,15 +99,15 @@ iter_size: 1
 
 
 #dataset:
-dataset: 4dmatch
-folder: -final
+dataset: plants
+folder: experiment
 batch_size: 1
-num_workers: 10
+num_workers: 0
 augment_noise: 0.002
-data_root: data_lepard
+data_root: data_plants
 split: {
-  "train": split/train,
-  "val": split/val,
+  "train": split2/train,
+  "val": split2/val,
 #  "test": split/4DMatch
-  "test": split/4DLoMatch
+  "test": split2/test
 }

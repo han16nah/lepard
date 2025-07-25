@@ -57,7 +57,7 @@ class _3DMatchTester(Trainer):
 
                 ##################################
                 if self.timers: self.timers.tic('load batch')
-                inputs = c_loader_iter.next()
+                inputs = next(c_loader_iter)
                 for k, v in inputs.items():
                     if type(v) == list:
                         inputs[k] = [item.to(self.device) for item in v]
@@ -249,7 +249,7 @@ class _4DMatchTester(Trainer):
 
                 ##################################
                 if self.timers: self.timers.tic('load batch')
-                inputs = c_loader_iter.next()
+                inputs = next(c_loader_iter)
                 for k, v in inputs.items():
                     if type(v) == list:
                         inputs[k] = [item.to(self.device) for item in v]
@@ -292,6 +292,8 @@ def get_trainer(config):
     if config.dataset == '3dmatch':
         return _3DMatchTester(config)
     elif config.dataset == '4dmatch':
+        return _4DMatchTester(config)
+    elif config.dataset == 'plants':
         return _4DMatchTester(config)
     else:
         raise NotImplementedError

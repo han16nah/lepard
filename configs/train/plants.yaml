@@ -1,4 +1,4 @@
-entangled: &entangled False
+entangled: &entangled True
 
 # kpfcn backbone
 kpfcn_config:
@@ -32,8 +32,8 @@ coarse_matching: &coarse_matching
   feature_dim: *coarse_feature_dim
   confidence_threshold: 0.2
   dsmax_temperature: 0.1
-  entangled: *entangled
   match_type: &match_type 'dual_softmax' #sinkhorn, dual_softmax
+  entangled: *entangled
   skh_init_bin_score: 1.0
   skh_iters: 3
   skh_prefilter: False
@@ -74,15 +74,14 @@ train_loss:
 
 
 # misc
-exp_dir:   !join  [  *positioning_type , *pe_type, entangled, *entangled, motwei, *motion_weight]
-mode: test
+exp_dir:   !join  [  *pe_type, entangled, *entangled ]
+mode: train
 gpu_mode:  True
 verbose: True
 verbose_freq: 1000
 do_valid: True
 do_test: True
-pretrain: 'pretrained/4dmatch/model_best_loss.pth'
-
+pretrain: ''
 
 
 # optimiser:
@@ -99,15 +98,15 @@ iter_size: 1
 
 
 #dataset:
-dataset: 4dmatch
-folder: -final
+dataset: plants
+folder: experiment
 batch_size: 1
-num_workers: 10
+num_workers: 0
 augment_noise: 0.002
-data_root: data_lepard
+data_root: data_plants
 split: {
-  "train": split/train,
-  "val": split/val,
-#  "test": split/4DMatch
-  "test": split/4DLoMatch
+  "train": split2/partitioned/train,
+  "val": split2/partitioned/val,
+  "test": split2/partitioned/test
+#  "test": split/4DLoMatch
 }

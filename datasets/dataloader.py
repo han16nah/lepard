@@ -1,10 +1,12 @@
 import numpy as np
 from functools import partial
 import torch
+torch.multiprocessing.set_sharing_strategy('file_system')
 import cpp_wrappers.cpp_subsampling.grid_subsampling as cpp_subsampling
 import cpp_wrappers.cpp_neighbors.radius_neighbors as cpp_neighbors
 from datasets._3dmatch import _3DMatch
 from datasets._4dmatch import _4DMatch
+from datasets._plants import _Plants
 from datasets.utils import blend_scene_flow, multual_nn_correspondence
 from lib.visualization import *
 
@@ -602,6 +604,10 @@ def get_datasets(config):
         train_set = _4DMatch(config, 'train', data_augmentation=True)
         val_set = _4DMatch(config, 'val', data_augmentation=False)
         test_set = _4DMatch(config, 'test', data_augmentation=False)
+    elif(config.dataset == 'plants'):
+        train_set = _Plants(config, 'train', data_augmentation=True)
+        val_set = _Plants(config, 'val', data_augmentation=False)
+        test_set = _Plants(config, 'test', data_augmentation=False)
     else:
         raise NotImplementedError
 
@@ -611,7 +617,7 @@ def get_datasets(config):
 
 def get_dataloader(dataset, config, shuffle=True, neighborhood_limits=None):
 
-    if config.dataset=='4dmatch':
+    if config.dataset=='4dmatch' or config.dataset=='plants':
         collate_fn = collate_fn_4dmatch
     elif config.dataset == '3dmatch':
         collate_fn = collate_fn_3dmatch
