@@ -605,7 +605,7 @@ def get_datasets(config):
         val_set = _4DMatch(config, 'val', data_augmentation=False)
         test_set = _4DMatch(config, 'test', data_augmentation=False)
     elif(config.dataset == 'plants'):
-        train_set = _Plants(config, 'train', data_augmentation=True)
+        train_set = _Plants(config, 'train', data_augmentation=False)
         val_set = _Plants(config, 'val', data_augmentation=False)
         test_set = _Plants(config, 'test', data_augmentation=False)
     else:
