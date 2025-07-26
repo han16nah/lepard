@@ -18,9 +18,20 @@ class Pipeline(nn.Module):
 
 
 
-    def forward(self, data,  timers=None):
+    def forward(self, data)#,  timers=None):
+        # debug what's in data and what shape it has
+        print("Data keys:", data.keys())
+        print("Data shapes:")
+        for k, v in data.items():
+            if isinstance(v, torch.Tensor):
+                print(f"{k}: {v.shape}")
+            elif isinstance(v, list):
+                print(f"{k}: list of length {len(v)}")
+            else:
+                print(f"{k}: {type(v)}")
+        
 
-        self.timers = timers
+        self.timers = None # timers
 
         if self.timers: self.timers.tic('kpfcn backbone encode')
         coarse_feats = self.backbone(data, phase="coarse")
