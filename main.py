@@ -58,6 +58,9 @@ if __name__ == '__main__':
     # model initialization
     config.kpfcn_config.architecture = architectures[config.dataset]
     config.model = Pipeline(config)
+    if torch.cuda.device_count() > 1 and config.gpu_mode:
+        print("Let's use", torch.cuda.device_count(), "GPUs!")
+        config.model = torch.nn.DataParallel(config.model)
     # config.model = KPFCNN(config)
 
     # create optimizer 
