@@ -18,7 +18,7 @@ class Pipeline(nn.Module):
 
 
 
-    def forward(self, data)#,  timers=None):
+    def forward(self, data): #,  timers=None):
         # debug what's in data and what shape it has
         print("Data keys:", data.keys())
         print("Data shapes:")
