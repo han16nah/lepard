@@ -1,3 +1,6 @@
 *.pyc
 *.pth
 .idea
+snapshot/
+*.o
+*.so
