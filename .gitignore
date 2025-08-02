@@ -4,3 +4,4 @@
 snapshot/
 *.o
 *.so
+pretrained/
