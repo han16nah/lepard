@@ -369,7 +369,7 @@ def collate_fn_4dmatch(list_data, config, neighborhood_limits ):
         if metric_index is None:
             metric_index_list = None
         else :
-            metric_index_list.append ( torch.from_numpy(metric_index))
+            metric_index_list.append ( torch.from_numpy(metric_index).long())
 
 
 
