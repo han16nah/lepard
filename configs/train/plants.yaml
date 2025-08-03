@@ -23,7 +23,7 @@ kpfcn_config:
   condition_feature: True
   coarse_feature_dim: &coarse_feature_dim 528 #[default 528, 1056]
   fine_feature_dim:  264
-  coarse_match_radius: 0.024 # 0.05 for L: -3, 0.06 for L: -2, 0.1 for L: -1
+  coarse_match_radius: 0.06 # 0.05 for L: -3, 0.06 for L: -2, 0.1 for L: -1
   coarse_level: -2
 #  fine_match_radius: 0.0375
 
@@ -42,12 +42,12 @@ coarse_matching: &coarse_matching
 coarse_transformer:
   feature_dim: *coarse_feature_dim
   n_head: 4
-  layer_types: ['self', 'cross', 'positioning', 'self', 'cross']
+  layer_types: ['self', 'cross', 'positioning', 'self', 'cross']  # TODO; remove positioning?
   positioning_type: &positioning_type 'procrustes' # options: [ 'randSO3' , 'procrustes', 'oracle']
   pe_type: &pe_type "rotary" # options: [ 'rotary', 'sinusoidal']
   entangled: *entangled
   vol_bnds: [ [ -3.6, -2.4,  1.14], [ 1.093, 0.78, 2.92 ]]
-  voxel_size: &voxel_size 0.04 #default 0.04
+  voxel_size: &voxel_size 0.06 #default 0.04
   feature_matching : *coarse_matching
   procrustes:
     max_condition_num: 40
@@ -66,7 +66,7 @@ train_loss:
   positioning_type: *positioning_type
 #  confidence_threshold : 0.2
   confidence_threshold_metric: 0.1  #confidence_threshold for evaluation
-  inlier_thr: 0.04 # 4 cm
+  inlier_thr: 0.05 # 4 cm
   fmr_thr: 0.5
   registration_threshold: 0.2 # [3DMatch: 0.2m]
   dataset: plants
@@ -105,8 +105,7 @@ num_workers: 0
 augment_noise: 0.002
 data_root: data_plants
 split: {
-  "train": split2/partitioned/train,
-  "val": split2/partitioned/val,
-  "test": split2/partitioned/test
-#  "test": split/4DLoMatch
+  "train": plants_S1-single/partitioned/train,
+  "val": plants_S1-single/partitioned/val,
+  "test": plants_S1-single/partitioned/test
 }

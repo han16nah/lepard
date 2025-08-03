@@ -47,7 +47,7 @@ coarse_transformer:
   pe_type: &pe_type "rotary" # options: [ 'rotary', 'sinusoidal']
   entangled: *entangled
   vol_bnds: [ [ -3.6, -2.4,  1.14], [ 1.093, 0.78, 2.92 ]]
-  voxel_size: &voxel_size 0.04 #default 0.04
+  voxel_size: &voxel_size 0.06 #default 0.04
   feature_matching : *coarse_matching
   procrustes:
     max_condition_num: 40
@@ -69,7 +69,7 @@ train_loss:
   inlier_thr: 0.05 # 4 cm
   fmr_thr: 0.5
   registration_threshold: 0.2 # [3DMatch: 0.2m]
-  dataset: 4dmatch
+  dataset: plants
   mutual_nearest: True
 
 
