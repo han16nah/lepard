@@ -1,4 +1,5 @@
 import time
+import torch
 
 
 class AverageMeter(object):
@@ -15,6 +16,9 @@ class AverageMeter(object):
         self.count = 0
 
     def update(self, val, n=1):
+        if isinstance(val, torch.Tensor):
+            # val = val.detach()  # break computation graph
+            val = val.item()    # convert to Python float
         self.val = val
         self.sum += val * n
         self.count += n
