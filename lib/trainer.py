@@ -13,8 +13,10 @@ from lib.utils import Logger, validate_gradient
 from lib.tictok import Timers
 try:
     from torch.amp import autocast, GradScaler
+    autocast_kwargs = {'device_type': 'cuda', 'dtype': torch.float16}
 except ImportError:
     from torch.cuda.amp import autocast, GradScaler
+    autocast_kwargs = {'dtype': torch.float16}
 
 
 class Trainer(object):
@@ -106,7 +108,7 @@ class Trainer(object):
 
 
         if (phase == 'train'):
-            with autocast(device_type='cuda', dtype=torch.float16):
+            with autocast(**autocast_kwargs):
                 self.model.train()
                 if self.timers: self.timers.tic('forward pass')
                 data = self.model(inputs, timers=self.timers)  # [N1, C1], [N2, C2]
