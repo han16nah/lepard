@@ -6,12 +6,10 @@ import torch
 import random
 from scipy.spatial.transform import Rotation
 from torch.utils.data import Dataset
-from lib.benchmark_utils import to_o3d_pcd, to_tsfm, KDTree_corr
+from lib.benchmark_utils import to_o3d_pcd, to_tsfm, KDTree_corr, get_correspondences, find_new_corr
 from lib.utils import load_obj
 HMN_intrin = np.array( [443, 256, 443, 250 ])
 cam_intrin = np.array( [443, 256, 443, 250 ])
-
-from lib.benchmark_utils import to_o3d_pcd, to_tsfm, get_correspondences
 
 
 class _Plants(Dataset):
@@ -34,12 +32,12 @@ class _Plants(Dataset):
 
         self.rot_factor = 1.
         self.augment_noise = config.augment_noise
-        self.max_points = 30000
+        self.max_points = 30_000
 
         self.overlap_radius = 0.0375
 
         self.cache = {}
-        self.cache_size = 30000
+        self.cache_size = 30_000
 
 
     def read_entries (self, split, data_root, d_slice=None, shuffle= False):
@@ -90,6 +88,33 @@ class _Plants(Dataset):
         #    idx = np.random.permutation(tgt_pcd.shape[0])[:self.max_points]
         #    tgt_pcd = tgt_pcd[idx]
 
+        downsampled = False
+        # if we get too many points, we do some downsampling
+        if src_pcd.shape[0] > self.max_points:
+            print("Downsampling...")
+            downsampled = True
+            pts_max = min(src_pcd.shape[0], tgt_pcd.shape[0])
+            sub_idx_src = np.random.permutation(pts_max)[:self.max_points]
+            src_pcd = src_pcd[sub_idx_src]
+            s2t_flow = s2t_flow[sub_idx_src]
+            # indices of target - no filtering
+            sub_idx_tgt = np.arange(tgt_pcd.shape[0])
+
+        if (tgt_pcd.shape[0] > self.max_points):
+            print("Downsampling...")
+            sub_idx_tgt = np.random.permutation(tgt_pcd.shape[0])[:self.max_points]
+            tgt_pcd = tgt_pcd[sub_idx_tgt]
+            if not downsampled:
+                sub_idx_src = np.arange(src_pcd.shape[0])
+        
+        src_pcd_deformed = src_pcd + s2t_flow
+        if downsampled:
+            correspondences = find_new_corr(correspondences, sub_idx_src, sub_idx_tgt)
+            # assert that none of the important variables are empty
+            assert src_pcd.shape[0] > 0, "Source point cloud is empty after downsampling."
+            assert tgt_pcd.shape[0] > 0, "Target point cloud is empty after downsampling."
+            assert correspondences.shape[0] > 0, "Correspondences are empty after downsampling."
+            assert s2t_flow.shape[0] > 0, "Scene flow is empty after downsampling."
 
         if debug:
             import mayavi.mlab as mlab
