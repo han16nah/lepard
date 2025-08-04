@@ -11,7 +11,10 @@ from tqdm import tqdm
 from lib.timer import AverageMeter
 from lib.utils import Logger, validate_gradient
 from lib.tictok import Timers
-from torch.amp import autocast, GradScaler
+try:
+    from torch.amp import autocast, GradScaler
+except ImportError:
+    from torch.cuda.amp import autocast, GradScaler
 
 
 class Trainer(object):
