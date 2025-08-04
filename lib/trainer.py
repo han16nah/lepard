@@ -11,6 +11,7 @@ from tqdm import tqdm
 from lib.timer import AverageMeter
 from lib.utils import Logger, validate_gradient
 from lib.tictok import Timers
+from torch.amp import autocast, GradScaler
 
 
 class Trainer(object):
@@ -51,6 +52,7 @@ class Trainer(object):
         self.loader['train'] = args.train_loader
         self.loader['val'] = args.val_loader
         self.loader['test'] = args.test_loader
+        self.scaler = GradScaler()
 
         self.timers = args.timers
 
@@ -101,19 +103,24 @@ class Trainer(object):
 
 
         if (phase == 'train'):
-            self.model.train()
-            if self.timers: self.timers.tic('forward pass')
-            data = self.model(inputs, timers=self.timers)  # [N1, C1], [N2, C2]
-            if self.timers: self.timers.toc('forward pass')
+            with autocast(device_type='cuda', dtype=torch.float16):
+                self.model.train()
+                if self.timers: self.timers.tic('forward pass')
+                data = self.model(inputs, timers=self.timers)  # [N1, C1], [N2, C2]
+                if self.timers: self.timers.toc('forward pass')
 
 
-            if self.timers: self.timers.tic('compute loss')
-            loss_info = self.loss( data)
-            if self.timers: self.timers.toc('compute loss')
+                if self.timers: self.timers.tic('compute loss')
+                loss_info = self.loss(data)
+                true_loss = loss_info['loss']
+                scaled_loss = true_loss / self.iter_size
 
-
+                loss_info['true_loss'] = true_loss
+                loss_info['scaled_loss'] = scaled_loss
+                if self.timers: self.timers.toc('compute loss')
+            
             if self.timers: self.timers.tic('backprop')
-            loss_info['loss'].backward()
+            self.scaler.scale(scaled_loss).backward()
             if self.timers: self.timers.toc('backprop')
 
 
@@ -136,6 +143,7 @@ class Trainer(object):
 
         num_iter = int(len(self.loader[phase].dataset) // self.loader[phase].batch_size) # drop last incomplete batch
         c_loader_iter = self.loader[phase].__iter__()
+        
 
         self.optimizer.zero_grad()
         for c_iter in tqdm(range(num_iter)):  # loop through this epoch
@@ -168,12 +176,13 @@ class Trainer(object):
             if ((c_iter + 1) % self.iter_size == 0 and phase == 'train'):
                 gradient_valid = validate_gradient(self.model)
                 if (gradient_valid):
-                    self.optimizer.step()
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
                 else:
                     self.logger.write('gradient not valid\n')
-                self.optimizer.zero_grad()
+                self.optimizer.zero_grad(set_to_none=True)
             # if self.timers: self.timers.toc('run optimisation')
-            ################################
+            ###############################
 
             torch.cuda.empty_cache()
 

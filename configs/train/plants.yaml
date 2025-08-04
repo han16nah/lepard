@@ -93,7 +93,7 @@ momentum: 0.93
 scheduler: ExpLR
 scheduler_gamma: 0.95
 scheduler_freq: 1
-iter_size: 1
+iter_size: 8
 
 
 
@@ -105,7 +105,7 @@ num_workers: 0
 augment_noise: 0.002
 data_root: data_plants
 split: {
-  "train": plants_S1-single/partitioned/train,
-  "val": plants_S1-single/partitioned/val,
-  "test": plants_S1-single/partitioned/test
+  "train": plants_S1-single/partitioned2/train,
+  "val": plants_S1-single/partitioned2/val,
+  "test": plants_S1-single/partitioned2/test
 }
