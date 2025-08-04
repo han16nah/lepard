@@ -171,6 +171,19 @@ def get_correspondences(src_pcd, tgt_pcd, trans, search_voxel_size, K=None):
     return correspondences
 
 
+def find_new_corr(corr, mask_x, mask_y):
+    old_to_new_x = {old_idx: new_idx for new_idx, old_idx in enumerate(np.flatnonzero(mask_x))}
+    old_to_new_y = {old_idx: new_idx for new_idx, old_idx in enumerate(np.flatnonzero(mask_y))}
+
+    # Filter and remap correspondences
+    new_corr = []
+    for i, j in corr:
+        if i in old_to_new_x and j in old_to_new_y:
+            new_corr.append([old_to_new_x[i], old_to_new_y[j]])
+
+    return np.array(new_corr, dtype=int)
+
+
 def KDTree_corr ( src_pcd_transformed, tgt_pcd, search_voxel_size, K=None):
 
     pcd_tree = o3d.geometry.KDTreeFlann(tgt_pcd)
