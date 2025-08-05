@@ -10,7 +10,6 @@ from datasets._plants import _Plants
 from datasets.utils import blend_scene_flow, multual_nn_correspondence
 from lib.visualization import *
 
-from torch.utils.data import DataLoader
 
 def batch_grid_subsampling_kpconv(points, batches_len, features=None, labels=None, sampleDl=0.1, max_p=0, verbose=0, random_grid_orient=True):
     """

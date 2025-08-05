@@ -233,7 +233,7 @@ class Trainer(object):
     def train(self):
         print('start training...')
         for epoch in range(self.start_epoch, self.max_epoch):
-            with torch.autograd.set_detect_anomaly(True):
+            with torch.autograd.set_detect_anomaly(False):  # True
                 if self.timers: self.timers.tic('run one epoch')
                 stats_meter = self.inference_one_epoch(epoch, 'train')
                 if self.timers: self.timers.toc('run one epoch')

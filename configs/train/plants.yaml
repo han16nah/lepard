@@ -9,7 +9,7 @@ kpfcn_config:
   first_subsampling_dl: 0.01
   in_feats_dim: 1
   conv_radius: 2.5
-  deform_radius: 5.0
+  deform_radius: 5.0  # increase this and check resulting neighborhood? 
   num_kernel_points: 15
   KP_extent: 2.0
   KP_influence: linear
@@ -105,7 +105,7 @@ num_workers: 0
 augment_noise: 0.002
 data_root: data_plants
 split: {
-  "train": plants_S1-single/partitioned2/train,
-  "val": plants_S1-single/partitioned2/val,
-  "test": plants_S1-single/partitioned2/test
+  "train": plants_S1-single/partitioned3/train,
+  "val": plants_S1-single/partitioned3/val,
+  "test": plants_S1-single/partitioned3/test
 }
