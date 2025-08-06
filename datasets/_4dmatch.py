@@ -4,6 +4,7 @@ import os, sys, glob, torch
 import numpy as np
 import torch
 import random
+from collections import OrderedDict
 from scipy.spatial.transform import Rotation
 from torch.utils.data import Dataset
 from lib.benchmark_utils import to_o3d_pcd, to_tsfm, KDTree_corr
@@ -38,7 +39,7 @@ class _4DMatch(Dataset):
 
         self.overlap_radius = 0.0375
 
-        self.cache = {}
+        self.cache = OrderedDict()
         self.cache_size = 30000
 
 
@@ -57,15 +58,14 @@ class _4DMatch(Dataset):
 
     def __getitem__(self, index, debug=False):
 
-
         if index in self.cache:
-            entry = self.cache[index]
-
-        else :
+            entry = self.cache.pop(index)
+            self.cache[index] = entry  # mark as recently used
+        else:
             entry = np.load(self.entries[index])
-            if len(self.cache) < self.cache_size:
-                self.cache[index] = entry
-
+            if len(self.cache) >= self.cache_size:
+                self.cache.popitem(last=False)  # evict least recently used
+            self.cache[index] = entry
 
         # get transformation
         rot = entry['rot']
