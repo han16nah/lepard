@@ -48,7 +48,7 @@ class _4DMatch(Dataset):
             random.shuffle(entries)
         if d_slice:
             return entries[:d_slice]
-        return entries
+        return np.array(entries).astype(np.string_)
 
 
     def __len__(self):
