@@ -6,15 +6,14 @@ import torch
 import random
 from scipy.spatial.transform import Rotation
 from torch.utils.data import Dataset
+from collections import OrderedDict
 from lib.benchmark_utils import to_o3d_pcd, to_tsfm, KDTree_corr, get_correspondences, find_new_corr
 from lib.utils import load_obj
-HMN_intrin = np.array( [443, 256, 443, 250 ])
-cam_intrin = np.array( [443, 256, 443, 250 ])
 
 
 class _Plants(Dataset):
 
-    def __init__(self, config, split, data_augmentation=True):
+    def __init__(self, config, split, data_augmentation=False):
         super(_Plants, self).__init__()
 
         assert split in ['train','val','test']
@@ -36,7 +35,7 @@ class _Plants(Dataset):
 
         self.overlap_radius = 0.0375
 
-        self.cache = {}
+        self.cache = OrderedDict()
         self.cache_size = 30_000
 
 
@@ -45,8 +44,8 @@ class _Plants(Dataset):
         if shuffle:
             random.shuffle(entries)
         if d_slice:
-            return entries[:d_slice]
-        return entries
+            return np.array(entries[:d_slice]).astype(np.string_)
+        return np.array(entries).astype(np.string_)
 
 
     def __len__(self):
@@ -55,14 +54,14 @@ class _Plants(Dataset):
 
     def __getitem__(self, index, debug=False):
 
-
         if index in self.cache:
-            entry = self.cache[index]
-
-        else :
+            entry = self.cache.pop(index)
+            self.cache[index] = entry  # mark as recently used
+        else:
             entry = np.load(self.entries[index])
-            if len(self.cache) < self.cache_size:
-                self.cache[index] = entry
+            if len(self.cache) >= self.cache_size:
+                self.cache.popitem(last=False)  # evict least recently used
+            self.cache[index] = entry
 
 
         # get transformation
@@ -71,7 +70,7 @@ class _Plants(Dataset):
         s2t_flow = entry['s2t_flow']
         src_pcd = entry['s_pc']
         tgt_pcd = entry['t_pc']
-        correspondences = entry['correspondences'] # obtained with search radius 0.015 m
+        correspondences = entry['correspondences']
         src_pcd_deformed = src_pcd + s2t_flow
         if "metric_index" in entry:
             metric_index = entry['metric_index'].squeeze()

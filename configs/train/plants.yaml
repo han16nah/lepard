@@ -105,7 +105,7 @@ num_workers: 0
 augment_noise: 0.002
 data_root: data_plants
 split: {
-  "train": plants_S1-single/partitioned3/train,
-  "val": plants_S1-single/partitioned3/val,
-  "test": plants_S1-single/partitioned3/test
+  "train": plants_S1-single/partitioned4/train,
+  "val": plants_S1-single/partitioned4/val,
+  "test": plants_S1-single/partitioned4/test
 }

@@ -86,7 +86,7 @@ pretrain: ''
 
 # optimiser:
 optimizer: SGD
-max_epoch: 1500
+max_epoch: 15
 lr: 0.015
 weight_decay: 0.000001
 momentum: 0.93
@@ -100,10 +100,10 @@ iter_size: 1
 #dataset:
 dataset: 4dmatch
 folder: -final
-batch_size: 8
-num_workers: 4  # try changing to 1 if the OSError persists
+batch_size: 4
+num_workers: 2  # try changing to 1 if the OSError persists
 augment_noise: 0.002
-data_root: data_lepard
+data_root: data_lepard_local
 split: {
   "train": split/train,
   "val": split/val,
