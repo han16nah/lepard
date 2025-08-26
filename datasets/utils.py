@@ -10,10 +10,6 @@ def partition_arg_topK(matrix, K, axis=0):
     :param axis: 0 or 1. dimension to be sorted.
     :return:
     """
-    n = matrix.shape[axis]
-    # cap K at n if K > n
-    if K >= n:
-        K = n-1
     a_part = np.argpartition(matrix, K, axis=axis)
     if axis == 0:
         row_index = np.arange(matrix.shape[1 - axis])
