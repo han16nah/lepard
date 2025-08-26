@@ -285,7 +285,85 @@ class _4DMatchTester(Trainer):
             return IRate, NR_FMR, n_sample
 
 
+class _PlantsTester(Trainer):
+    """
+    Plants tester
+    """
+    def __init__(self,args):
+        Trainer.__init__(self, args)
 
+    def test(self):
+
+        for thr in [0.025, 0.05, 0.1]:
+            import time
+            start = time.time()
+            ir, fmr, nspl = self.test_thr(thr)
+            print( "conf_threshold", thr,  "NFMR:", fmr, " Inlier rate:", ir, "Number sample:", nspl)
+            print( "time costs:", time.time() - start)
+
+    def test_thr(self, conf_threshold=None):
+
+        num_iter = math.ceil(len(self.loader['test'].dataset) // self.loader['test'].batch_size)
+        c_loader_iter = self.loader['test'].__iter__()
+
+
+        self.model.eval()
+
+
+        assert self.loader['test'].batch_size == 1
+
+        IR=0.
+        NR_FMR=0.
+
+        inlier_thr = recall_thr = 0.04  # hardcoded?
+
+        n_sample = 0.
+
+        with torch.no_grad():
+            for idx in tqdm(range(num_iter)): # loop through this epoch
+
+
+
+                ##################################
+                if self.timers: self.timers.tic('load batch')
+                inputs = next(c_loader_iter)
+                for k, v in inputs.items():
+                    if type(v) == list:
+                        inputs[k] = [item.to(self.device) for item in v]
+                    elif type(v) in [ dict, float, type(None), np.ndarray]:
+                        pass
+                    else:
+                        inputs[k] = v.to(self.device)
+                if self.timers: self.timers.toc('load batch')
+                ##################################
+
+
+                if self.timers: self.timers.tic('forward pass')
+                data = self.model(inputs, timers=self.timers)  # [N1, C1], [N2, C2]
+                if self.timers: self.timers.toc('forward pass')
+
+                match_pred, _, _ = CM.get_match(data['conf_matrix_pred'], thr=conf_threshold, mutual=True)
+                ir = MML.compute_inlier_ratio(match_pred, data, inlier_thr=inlier_thr, s2t_flow=data['coarse_flow'][0][None] )[0]
+
+                try:
+                    nrfmr = compute_nrfmr(match_pred, data, recall_thr=recall_thr)
+                except ValueError:
+                    print( "Error for conf_threshold", conf_threshold)
+                    nrfmr = 0.
+
+                IR += ir
+                NR_FMR += nrfmr
+
+                n_sample += match_pred.shape[0]
+
+
+            IRate = IR/len(self.loader['test'].dataset)
+            NR_FMR = NR_FMR/len(self.loader['test'].dataset)
+            n_sample = n_sample/len(self.loader['test'].dataset)
+
+            if self.timers: self.timers.print()
+
+            return IRate, NR_FMR, n_sample
 
 
 def get_trainer(config):
@@ -294,6 +372,6 @@ def get_trainer(config):
     elif config.dataset == '4dmatch':
         return _4DMatchTester(config)
     elif config.dataset == 'plants':
-        return _4DMatchTester(config)
+        return _PlantsTester(config)
     else:
         raise NotImplementedError
