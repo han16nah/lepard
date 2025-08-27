@@ -9,7 +9,7 @@ kpfcn_config:
   first_subsampling_dl: 0.01
   in_feats_dim: 1
   conv_radius: 2.5
-  deform_radius: 5.0  # increase this and check resulting neighborhood? 
+  deform_radius: 3.0  # increase this and check resulting neighborhood? 
   num_kernel_points: 15
   KP_extent: 2.0
   KP_influence: linear
@@ -99,13 +99,13 @@ iter_size: 8
 
 #dataset:
 dataset: plants
-folder: firsttry
+folder: S5
 batch_size: 1
-num_workers: 4
+num_workers: 2
 augment_noise: 0.002
 data_root: data_plants
 split: {
-  "train": plants_S1-single/partitioned5/train,
-  "val": plants_S1-single/partitioned5/val,
-  "test": plants_S1-single/partitioned5/test
+  "train": plants_S5/partitioned/train,
+  "val": plants_S5/partitioned/val,
+  "test": plants_S5/partitioned/test
 }

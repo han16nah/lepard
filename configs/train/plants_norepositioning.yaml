@@ -42,7 +42,7 @@ coarse_matching: &coarse_matching
 coarse_transformer:
   feature_dim: *coarse_feature_dim
   n_head: 4
-  layer_types: ['self', 'cross', 'positioning', 'self', 'cross']
+  layer_types: ['self', 'cross', 'self', 'cross']  #, 'positioning', 'self', 'cross']  # TODO; remove positioning?
   positioning_type: &positioning_type 'procrustes' # options: [ 'randSO3' , 'procrustes', 'oracle']
   pe_type: &pe_type "rotary" # options: [ 'rotary', 'sinusoidal']
   entangled: *entangled
@@ -74,7 +74,7 @@ train_loss:
 
 
 # misc
-exp_dir:   !join  [  *pe_type, entangled, *entangled ]
+exp_dir:   !join  [  *pe_type, entangled, *entangled, norepositioning]
 mode: train
 gpu_mode:  True
 verbose: True
