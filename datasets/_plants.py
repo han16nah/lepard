@@ -31,7 +31,7 @@ class _Plants(Dataset):
 
         self.rot_factor = 1.
         self.augment_noise = config.augment_noise
-        self.max_points = 30_000
+        self.max_points = 25_000
 
         self.overlap_radius = 0.0375
 
