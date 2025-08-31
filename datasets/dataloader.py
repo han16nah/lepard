@@ -514,7 +514,13 @@ def collate_fn_4dmatch(list_data, config, neighborhood_limits ):
         c_tgt_pcd_np = coarse_pcd[accumu + n_s_pts: accumu + n_s_pts + n_t_pts].numpy()
         #interpolate flow
         f_src_pcd = batched_points_list[entry_id * 2]
-        c_flow = blend_scene_flow( c_src_pcd_np, f_src_pcd, sflow_list[entry_id].numpy(), knn=3)
+        try:
+            c_flow = blend_scene_flow( c_src_pcd_np, f_src_pcd, sflow_list[entry_id].numpy(), knn=3)
+        except ValueError:
+            # skip this entry
+            print(f"Skipping entry {entry_id}")
+            continue
+
         c_src_pcd_deformed = c_src_pcd_np + c_flow
         s_pc_wrapped = (np.matmul( batched_rot[entry_id].numpy(), c_src_pcd_deformed.T ) + batched_trn [entry_id].numpy()).T
         coarse_match_gt = torch.from_numpy( multual_nn_correspondence(s_pc_wrapped , c_tgt_pcd_np , search_radius=config['coarse_match_radius'])  )# 0.1m scaled
