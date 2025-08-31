@@ -5,3 +5,4 @@ snapshot/
 *.o
 *.so
 pretrained/
+data_*
