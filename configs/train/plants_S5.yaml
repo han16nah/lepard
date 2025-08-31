@@ -103,7 +103,7 @@ folder: S5
 batch_size: 1
 num_workers: 4
 augment_noise: 0.002
-data_root: data_plants
+data_root: data_plants_local
 split: {
   "train": plants_S5/partitioned3/train,
   "val": plants_S5/partitioned3/val,

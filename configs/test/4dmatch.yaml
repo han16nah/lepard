@@ -81,13 +81,14 @@ verbose: True
 verbose_freq: 1000
 do_valid: True
 do_test: True
-pretrain: 'pretrained/4dmatch/model_best_loss.pth'
+#pretrain: 'pretrained/4dmatch/model_best_loss.pth'
+pretrain: 'snapshot/4dmatch-final/rotary_entangled_True/checkpoints/model_best_loss.pth'
 
 
 
 # optimiser:
 optimizer: SGD
-max_epoch: 1500
+max_epoch: 15
 lr: 0.015
 weight_decay: 0.000001
 momentum: 0.93
@@ -108,6 +109,6 @@ data_root: data_lepard
 split: {
   "train": split/train,
   "val": split/val,
-#  "test": split/4DMatch
-  "test": split/4DLoMatch
+  "test": split/4DMatch
+  # "test": split/4DLoMatch
 }

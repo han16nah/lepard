@@ -66,7 +66,7 @@ train_loss:
   positioning_type: *positioning_type
 #  confidence_threshold : 0.2
   confidence_threshold_metric: 0.1  #confidence_threshold for evaluation
-  inlier_thr: 0.05 # 4 cm
+  inlier_thr: 0.04 # 4 cm
   fmr_thr: 0.5
   registration_threshold: 0.2 # [3DMatch: 0.2m]
   dataset: plants
