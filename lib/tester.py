@@ -343,18 +343,22 @@ class _PlantsTester(Trainer):
                 if self.timers: self.timers.toc('forward pass')
 
                 match_pred, _, _ = CM.get_match(data['conf_matrix_pred'], thr=conf_threshold, mutual=True)
-                ir = MML.compute_inlier_ratio(match_pred, data, inlier_thr=inlier_thr, s2t_flow=data['coarse_flow'][0][None] )[0]
-
+                try:
+                    ir = MML.compute_inlier_ratio(match_pred, data, inlier_thr=inlier_thr, s2t_flow=data['coarse_flow'][0][None] )[0]
+                except IndexError:
+                    print( "Error for conf_threshold", conf_threshold)
+                    ir = None
                 try:
                     nrfmr = compute_nrfmr(match_pred, data, recall_thr=recall_thr)
                 except ValueError:
                     print( "Error for conf_threshold", conf_threshold)
-                    nrfmr = 0.
+                    nrfmr = None
 
-                IR += ir
-                NR_FMR += nrfmr
+                if not (ir is None) and not (nrfmr is None):
+                    IR += ir
+                    NR_FMR += nrfmr
 
-                n_sample += match_pred.shape[0]
+                    n_sample += match_pred.shape[0]
 
 
             IRate = IR/len(self.loader['test'].dataset)
