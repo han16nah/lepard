@@ -1,4 +1,4 @@
-entangled: &entangled True
+entangled: &entangled False
 
 # kpfcn backbone
 kpfcn_config:
@@ -9,7 +9,7 @@ kpfcn_config:
   first_subsampling_dl: 0.01
   in_feats_dim: 1
   conv_radius: 2.5
-  deform_radius: 5.0  # increase this and check resulting neighborhood? 
+  deform_radius: 5.0
   num_kernel_points: 15
   KP_extent: 2.0
   KP_influence: linear
@@ -32,8 +32,8 @@ coarse_matching: &coarse_matching
   feature_dim: *coarse_feature_dim
   confidence_threshold: 0.2
   dsmax_temperature: 0.1
-  match_type: &match_type 'dual_softmax' #sinkhorn, dual_softmax
   entangled: *entangled
+  match_type: &match_type 'dual_softmax' #sinkhorn, dual_softmax
   skh_init_bin_score: 1.0
   skh_iters: 3
   skh_prefilter: False
@@ -42,7 +42,7 @@ coarse_matching: &coarse_matching
 coarse_transformer:
   feature_dim: *coarse_feature_dim
   n_head: 4
-  layer_types: ['self', 'cross', 'positioning', 'self', 'cross']
+  layer_types: ['self', 'cross', 'positioning', 'self', 'cross']  # TODO; add back positioning?
   positioning_type: &positioning_type 'procrustes' # options: [ 'randSO3' , 'procrustes', 'oracle']
   pe_type: &pe_type "rotary" # options: [ 'rotary', 'sinusoidal']
   entangled: *entangled
@@ -74,14 +74,15 @@ train_loss:
 
 
 # misc
-exp_dir:   !join  [  *pe_type, entangled, *entangled ]
-mode: train
+exp_dir:   !join  [  *positioning_type , *pe_type, entangled, *entangled, motwei, *motion_weight]
+mode: test
 gpu_mode:  True
 verbose: True
 verbose_freq: 1000
 do_valid: True
 do_test: True
-pretrain: ''
+# pretrain: 'pretrained/plants/plants_S1-single_weights.pth'
+pretrain: 'snapshot/plantsS1-single_S5_merged/rotary_entangled_True/checkpoints/model_best_loss.pth
 
 
 # optimiser:
@@ -93,19 +94,19 @@ momentum: 0.93
 scheduler: ExpLR
 scheduler_gamma: 0.95
 scheduler_freq: 1
-iter_size: 8
+iter_size: 1
 
 
 
 #dataset:
 dataset: plants
-folder: firsttry
+folder: S5_S1_test
 batch_size: 1
-num_workers: 4
+num_workers: 0
 augment_noise: 0.002
 data_root: data_plants
 split: {
-  "train": plants_S1-single/partitioned5/train,
-  "val": plants_S1-single/partitioned5/val,
-  "test": plants_S1-single/partitioned5/test
+  "train": plants_S1-single_S5_merged/partitioned-final/train,
+  "val": plants_S1-single_S5_merged/partitioned-final/val,
+  "test": plants_S1-single_S5_merged/partitioned-final/test
 }
