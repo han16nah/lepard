@@ -7,3 +7,4 @@ snapshot/
 pretrained/
 data_*
 *.out
+settings.json
