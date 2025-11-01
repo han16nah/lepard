@@ -6,3 +6,4 @@ snapshot/
 *.so
 pretrained/
 data_*
+*.out
