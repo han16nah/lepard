@@ -31,7 +31,7 @@ class _Plants(Dataset):
 
         self.rot_factor = 1.
         self.augment_noise = config.augment_noise
-        self.max_points = 25_000
+        self.max_points = 100_000
 
         self.overlap_radius = 0.0375
 
@@ -44,8 +44,8 @@ class _Plants(Dataset):
         if shuffle:
             random.shuffle(entries)
         if d_slice:
-            return np.array(entries[:d_slice]).astype(np.string_)
-        return np.array(entries).astype(np.string_)
+            return np.array(entries[:d_slice]).astype(np.bytes_)
+        return np.array(entries).astype(np.bytes_)
 
 
     def __len__(self):
