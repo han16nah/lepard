@@ -197,6 +197,8 @@ class Trainer(object):
                 for key, _ in loss_info.items():
                     stats_meter[key] = AverageMeter()
             for key, value in loss_info.items():
+                if torch.is_tensor(value):
+                    value = value.detach().cpu().item()  # .item() if it's a scalar loss
                 stats_meter[key].update(value)
 
             if phase == 'train' :
