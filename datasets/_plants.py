@@ -31,7 +31,7 @@ class _Plants(Dataset):
 
         self.rot_factor = 1.
         self.augment_noise = config.augment_noise
-        self.max_points = 100_000
+        self.max_points = 200_000
 
         self.overlap_radius = 0.0375
 
@@ -116,17 +116,28 @@ class _Plants(Dataset):
             assert s2t_flow.shape[0] > 0, "Scene flow is empty after downsampling."
 
         if debug:
-            import mayavi.mlab as mlab
+            #import mayavi.mlab as mlab
             c_red = (224. / 255., 0 / 255., 125 / 255.)
             c_pink = (224. / 255., 75. / 255., 232. / 255.)
             c_blue = (0. / 255., 0. / 255., 255. / 255.)
-            scale_factor = 0.013
+            #scale_factor = 0.013
+            #src_wrapped = (np.matmul( rot, src_pcd_deformed.T ) + trans ).T
+            #mlab.points3d(src_wrapped[:, 0], src_wrapped[:, 1], src_wrapped[:, 2], scale_factor=scale_factor, color=c_pink)
+            #mlab.points3d(src_pcd[ :, 0] , src_pcd[ :, 1], src_pcd[:,  2], scale_factor=scale_factor , color=c_red)
+            #mlab.points3d(tgt_pcd[ :, 0] , tgt_pcd[ :, 1], tgt_pcd[:,  2], scale_factor=scale_factor , color=c_blue)
+            #mlab.show()
+            import open3d as o3d
+            src_o3d = o3d.geometry.PointCloud()
+            tgt_o3d = o3d.geometry.PointCloud()
             src_wrapped = (np.matmul( rot, src_pcd_deformed.T ) + trans ).T
-            mlab.points3d(src_wrapped[:, 0], src_wrapped[:, 1], src_wrapped[:, 2], scale_factor=scale_factor, color=c_pink)
-            mlab.points3d(src_pcd[ :, 0] , src_pcd[ :, 1], src_pcd[:,  2], scale_factor=scale_factor , color=c_red)
-            mlab.points3d(tgt_pcd[ :, 0] , tgt_pcd[ :, 1], tgt_pcd[:,  2], scale_factor=scale_factor , color=c_blue)
-            mlab.show()
-
+            src_wrapped_o3d = o3d.geometry.PointCloud()
+            src_o3d.points = o3d.utility.Vector3dVector(src_pcd)
+            tgt_o3d.points = o3d.utility.Vector3dVector(tgt_pcd)
+            src_wrapped_o3d.points = o3d.utility.Vector3dVector(src_wrapped)
+            src_o3d.paint_uniform_color(c_red)
+            tgt_o3d.paint_uniform_color(c_blue)
+            src_wrapped_o3d.paint_uniform_color(c_pink)
+            o3d.visualization.draw_geometries([src_o3d, tgt_o3d, src_wrapped_o3d])
 
 
         # add gaussian noise
@@ -151,9 +162,13 @@ class _Plants(Dataset):
         if debug:
             # wrapp_src = (np.matmul(rot, src_pcd.T)+ trans).T
             src_wrapped = (np.matmul( rot, src_pcd_deformed.T ) + trans ).T
-            mlab.points3d(src_wrapped[:, 0], src_wrapped[:, 1], src_wrapped[:, 2], scale_factor=scale_factor, color=c_red)
-            mlab.points3d(tgt_pcd[:, 0], tgt_pcd[:, 1], tgt_pcd[:, 2], scale_factor=scale_factor, color=c_blue)
-            mlab.show()
+            #mlab.points3d(src_wrapped[:, 0], src_wrapped[:, 1], src_wrapped[:, 2], scale_factor=scale_factor, color=c_red)
+            #mlab.points3d(tgt_pcd[:, 0], tgt_pcd[:, 1], tgt_pcd[:, 2], scale_factor=scale_factor, color=c_blue)
+            #mlab.show()
+            src_wrapped_o3d = o3d.geometry.PointCloud()
+            src_wrapped_o3d.points = o3d.utility.Vector3dVector(src_wrapped)
+            src_wrapped_o3d.paint_uniform_color(c_red)
+            o3d.visualization.draw_geometries([tgt_o3d, src_wrapped_o3d])
 
 
         if (trans.ndim == 1):
@@ -172,29 +187,4 @@ class _Plants(Dataset):
 
 
 if __name__ == '__main__':
-    from lib.utils import load_config
-    from easydict import EasyDict as edict
-    from lib.tictok import Timers
-    import yaml
-    def join(loader, node):
-        seq = loader.construct_sequence(node)
-        return '_'.join([str(i) for i in seq])
-    yaml.add_constructor('!join', join)
-
-    config = "/home/liyang/workspace/Regformer/configs/train/4dmatch.yaml"
-    with open(config,'r') as f:
-        config = yaml.load(f, Loader=yaml.Loader)
-
-    config = edict(config)
-    config.timers=Timers()
-    D = _Plants(config, "test")
-
-    for i in range (len(D)):
-
-        try:
-            if i%1000 == 0 :
-                print (i,"/",len(D))
-            D.__getitem__(i, debug=True)
-        except:
-            # print(i, "/", len(D))
-            pass
+    pass
