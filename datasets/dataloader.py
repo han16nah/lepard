@@ -537,7 +537,7 @@ def collate_fn_4dmatch(list_data, config, neighborhood_limits ):
 
         vis=False # for debug
         if vis :
-            viz_coarse_nn_correspondence_mayavi(c_src_pcd_np, c_tgt_pcd_np, coarse_match_gt, scale_factor=0.02)
+            viz_coarse_nn_correspondence_open3d(c_src_pcd_np, c_tgt_pcd_np, coarse_match_gt, scale_factor=0.02)
 
 
     src_ind_coarse_split = torch.cat(src_ind_coarse_split)
