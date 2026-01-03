@@ -315,7 +315,10 @@ class _PlantsTester(Trainer):
         IR=0.
         NR_FMR=0.
 
-        inlier_thr = recall_thr = 0.04  # hardcoded?
+        inlier_thr = self.inlier_thr
+        recall_thr = inlier_thr
+        if not inlier_thr == 0.04:
+            print( "Warning: inlier threshold is set to ", inlier_thr)
 
         n_sample = 0.
 
@@ -363,11 +366,11 @@ class _PlantsTester(Trainer):
 
             IRate = IR/len(self.loader['test'].dataset)
             NR_FMR = NR_FMR/len(self.loader['test'].dataset)
-            n_sample = n_sample/len(self.loader['test'].dataset)
+            avg_matches = n_sample/len(self.loader['test'].dataset)
 
             if self.timers: self.timers.print()
 
-            return IRate, NR_FMR, n_sample
+            return IRate, NR_FMR, avg_matches
 
 
 def get_trainer(config):
