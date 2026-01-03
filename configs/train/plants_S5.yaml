@@ -69,7 +69,7 @@ train_loss:
   inlier_thr: 0.04 # 4 cm
   fmr_thr: 0.5
   registration_threshold: 0.2 # [3DMatch: 0.2m]
-  dataset: plants
+  dataset: 4dmatch
   mutual_nearest: True
 
 
@@ -100,8 +100,8 @@ iter_size: 1
 #dataset:
 dataset: plants
 folder: S5
-batch_size: 8
-num_workers: 16
+batch_size: 2
+num_workers: 8
 augment_noise: 0.005
 data_root: data_plants
 split: {
