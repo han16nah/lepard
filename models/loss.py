@@ -97,10 +97,14 @@ class MatchMotionLoss(nn.Module):
         #get the overlap mask, for dense motion loss
         s_overlap_mask = torch.zeros_like(src_mask).bool()
         for bi, corr in enumerate (match_gt):
-            s_overlap_mask[bi][ corr[0] ] = True
+            # s_overlap_mask[bi][ corr[0] ] = True
+            if corr.numel() > 0:
+                valid_idx = corr[0][src_mask[bi][corr[0]]]
+                s_overlap_mask[bi, valid_idx] = True
         # compute focal loss
         c_weight = (src_mask[:, :, None] * tgt_mask[:, None, :]).float()
         conf_matrix_gt = self.match_2_conf_matrix(match_gt, conf_matrix_pred)
+        conf_matrix_gt = conf_matrix_gt.detach()
         data['conf_matrix_gt'] = conf_matrix_gt
         focal_coarse = self.compute_correspondence_loss(conf_matrix_pred, conf_matrix_gt, weight=c_weight)
         recall, precision = self.compute_match_recall( conf_matrix_gt, data['coarse_match_pred'])
@@ -123,33 +127,17 @@ class MatchMotionLoss(nn.Module):
                 src_pcd_wrapped_gt = (torch.matmul(R_s2t_gt, data['s_pcd'].transpose(1, 2)) + t_s2t_gt).transpose(1, 2)
             sflow_gt = src_pcd_wrapped_gt - data['s_pcd']
 
-            e1 = torch.sum(torch.abs(sflow_pred - sflow_gt), 2)
-            e1 = e1[s_overlap_mask] # [data['src_mask']]
-            l1_loss = torch.mean(e1)
+            idx = s_overlap_mask.nonzero(as_tuple=True)
+            if idx[0].numel() > 0:
+                e1 = torch.sum(
+                    torch.abs(
+                        sflow_pred[idx] - sflow_gt[idx]
+                    ), dim=1
+                )
+                l1_loss = e1.mean()
+            else:
+                l1_loss = 0.0 * sflow_pred.sum()
             loss = loss + self.mot_w * l1_loss
-
-
-        #
-        # if eval_metric :
-        #
-        #     match_pred, _, _ = CM.get_match(data['conf_matrix_pred'], thr=self.confidence_threshold_metric, mutual=self.mutual_nearest)
-        #
-        #     '''Inlier Ratio (IR)'''
-        #     ir = self.compute_inlier_ratio(match_pred, data, self.inlier_thr,
-        #                                    s2t_flow=s2t_flow if self.dataset == "4dmatch" else None)
-        #     loss_info.update({"Inlier Ratio": ir.mean()})
-        #
-        #     if self.dataset == '3dmatch':
-        #
-        #         '''Feature Matching Recall (FMR)'''
-        #         fmr = (ir > self.fmr_thr).float().sum() / len(ir)
-        #         loss_info.update({"Feature Matching Recall": fmr})
-        #
-        #         '''Registration Recall (RR)'''
-        #         rot_, trn_ = self.ransac_regist_coarse(data['s_pcd'], data['t_pcd'], src_mask, tgt_mask , match_pred)
-        #         rot, trn = rot_.to(data['s_pcd']) , trn_.to(data['s_pcd'])
-        #         rr = self.compute_registration_recall(rot, trn, data, self.registration_threshold)
-        #         loss_info.update({'Registration_Recall': rr})
 
 
 
@@ -180,9 +168,16 @@ class MatchMotionLoss(nn.Module):
                         src_pcd_wrapped_gt = ( torch.matmul(R_s2t_gt, data['s_pcd'].transpose(1, 2)) + t_s2t_gt).transpose(1, 2)
                     sflow_gt = src_pcd_wrapped_gt - data['s_pcd']
 
-                    e1 = torch.sum(torch.abs(sflow_pred - sflow_gt), 2) #[data['src_mask']]
-                    e1 = e1[s_overlap_mask]  # [data['src_mask']]
-                    l1_loss = torch.mean(e1)
+                    idx = s_overlap_mask.nonzero(as_tuple=True)
+                    if idx[0].numel() > 0:
+                        e1 = torch.sum(
+                            torch.abs(
+                                sflow_pred[idx] - sflow_gt[idx]
+                            ), dim=1
+                        )
+                        l1_loss = e1.mean()
+                    else:
+                        l1_loss = 0.0 * sflow_pred.sum()
                     loss = loss + self.mot_w * l1_loss
 
         return loss
@@ -293,19 +288,23 @@ class MatchMotionLoss(nn.Module):
         pos_mask = conf_gt == 1
         neg_mask = conf_gt == 0
 
+        # corner case; return zero loss
+        if not pos_mask.any() and not neg_mask.any():
+            return 0.0 * conf.sum()
+
         pos_w, neg_w = self.pos_w, self.neg_w
 
         #corner case assign a wrong gt
-        if not pos_mask.any():
-            pos_mask[0, 0, 0] = True
-            if weight is not None:
-                weight[0, 0, 0] = 0.
-            pos_w = 0.
-        if not neg_mask.any():
-            neg_mask[0, 0, 0] = True
-            if weight is not None:
-                weight[0, 0, 0] = 0.
-            neg_w = 0.
+        #if not pos_mask.any():
+        #    pos_mask[0, 0, 0] = True
+        #    if weight is not None:
+        #        weight[0, 0, 0] = 0.
+        #    pos_w = 0.
+        #if not neg_mask.any():
+        #    neg_mask[0, 0, 0] = True
+        #    if weight is not None:
+        #        weight[0, 0, 0] = 0.
+        #    neg_w = 0.
 
         # focal loss
         conf = torch.clamp(conf, 1e-6, 1 - 1e-6)
@@ -313,6 +312,8 @@ class MatchMotionLoss(nn.Module):
         gamma = self.focal_gamma
 
         if self.match_type == "dual_softmax":
+            if not pos_mask.any():
+                return 0.0 * conf.sum()
             pos_conf = conf[pos_mask]
             loss_pos = - alpha * torch.pow(1 - pos_conf, gamma) * pos_conf.log()
             if weight is not None:
@@ -322,15 +323,29 @@ class MatchMotionLoss(nn.Module):
 
         elif self.match_type == "sinkhorn":
             # no supervision on dustbin row & column.
-            loss_pos = - alpha * torch.pow(1 - conf[pos_mask], gamma) * (conf[pos_mask]).log()
-            loss_neg = - alpha * torch.pow(conf[neg_mask], gamma) * (1 - conf[neg_mask]).log()
-            loss = pos_w * loss_pos.mean() + neg_w * loss_neg.mean()
+            loss = 0.0
+            if pos_mask.any():
+
+                loss_pos = - alpha * torch.pow(1 - conf[pos_mask], gamma) * (conf[pos_mask]).log()
+                loss += pos_w * loss_pos.mean()
+            if neg_mask.any():
+                loss_neg = - alpha * torch.pow(conf[neg_mask], gamma) * (1 - conf[neg_mask]).log()
+                loss += neg_w * loss_neg.mean()
             return loss
+
 
     def match_2_conf_matrix(self, matches_gt, matrix_pred):
         matrix_gt = torch.zeros_like(matrix_pred)
+
+        B, S, T = matrix_pred.shape
         for b, match in enumerate (matches_gt) :
-            matrix_gt [ b][ match[0],  match[1] ] = 1
+            if match.numel() == 0:
+                continue
+            src, tgt = match[0], match[1]
+            valid = (src >= 0) & (src < S) & (tgt >= 0) & (tgt < T)
+            if valid.any():
+                matrix_gt[b, src[valid], tgt[valid]] = 1
+            
         return matrix_gt
 
 
@@ -343,15 +358,19 @@ class MatchMotionLoss(nn.Module):
         '''
 
         pred_matrix = torch.zeros_like(conf_matrix_gt)
+        if match_pred.numel() > 0:
+            b_ind, src_ind, tgt_ind = match_pred[:, 0], match_pred[:, 1], match_pred[:, 2]
+            B, S, T = conf_matrix_gt.shape
+            valid = (b_ind >= 0) & (b_ind < B) & (src_ind >= 0) & (src_ind < S) & (tgt_ind >= 0) & (tgt_ind < T)
+            if valid.any():
+                pred_matrix[b_ind[valid], src_ind[valid], tgt_ind[valid]] = 1
 
-        b_ind, src_ind, tgt_ind = match_pred[:, 0], match_pred[:, 1], match_pred[:, 2]
-        pred_matrix[b_ind, src_ind, tgt_ind] = 1.
+        true_positive = ((pred_matrix.bool()) & conf_matrix_gt.bool()).float().sum()
+        gt_positive = conf_matrix_gt.sum()
+        pred_positive = max(match_pred.shape[0], 1)
 
-        true_positive = (pred_matrix == conf_matrix_gt) * conf_matrix_gt
-
-        recall = true_positive.sum() / conf_matrix_gt.sum()
-
-        precision = true_positive.sum() / max(len(match_pred), 1)
+        recall = true_positive / gt_positive.clamp(min=1)
+        precision = true_positive / pred_positive
 
         return recall, precision
 
@@ -397,6 +416,11 @@ class MatchMotionLoss(nn.Module):
         s_pcd, t_pcd = data['s_pcd'], data['t_pcd'] #B,N,3
         batched_rot = data['batched_rot'] #B,3,3
         batched_trn = data['batched_trn']
+        device = s_pcd.device
+        B = s_pcd.shape[0]
+
+        if match_pred.numel() == 0:
+            return torch.zeros(B, device=device)
 
         if s2t_flow is not None: # 4dmatch
             s_pcd_deformed = s_pcd + s2t_flow
@@ -404,23 +428,35 @@ class MatchMotionLoss(nn.Module):
         else:  # 3dmatch
             s_pcd_wrapped = (torch.matmul(batched_rot, s_pcd.transpose(1, 2)) + batched_trn).transpose(1,2)
 
-        s_pcd_matched = s_pcd_wrapped [match_pred[:,0], match_pred[:,1]]
-        t_pcd_matched = t_pcd [match_pred[:,0], match_pred[:,2]]
-        inlier = torch.sum( (s_pcd_matched - t_pcd_matched)**2 , dim= 1) <  inlier_thr**2
+        b, s_idx, t_idx = match_pred[:, 0], match_pred[:, 1], match_pred[:, 2]
+        Ns, Nt = s_pcd_wrapped.shape[1], t_pcd.shape[1]
 
-        bsize = len(s_pcd)
-        IR=[]
-        for i in range(bsize):
-            pair_i = match_pred[:, 0] == i
-            n_match = pair_i.sum()
-            inlier_i = inlier[pair_i]
-            n_inlier = inlier_i.sum().float()
-            if n_match <3:
-                IR.append( n_match.float()*0)
-            else :
-                IR.append(n_inlier/n_match)
+        valid = (
+            (b >= 0) & (b < B) &
+            (s_idx >= 0) & (s_idx < Ns) &
+            (t_idx >= 0) & (t_idx < Nt)
+        )
 
-        return torch.stack(IR, dim=0)
+        if not valid.any():
+            return torch.zeros(B, device=device)
+
+        b, s_idx, t_idx = b[valid], s_idx[valid], t_idx[valid]
+
+        s_pcd_matched = s_pcd_wrapped[b, s_idx]
+        t_pcd_matched = t_pcd[b, t_idx]
+
+        inlier = ((s_pcd_matched - t_pcd_matched) ** 2).sum(dim=1) < inlier_thr ** 2
+
+        IR = []
+        for i in range(B):
+            mask = b == i
+            n_match = mask.sum()
+            if n_match == 0:
+                IR.append(torch.tensor(0.0, device=device))
+            else:
+                IR.append(inlier[mask].float().mean())
+
+        return torch.stack(IR)
 
 
 
