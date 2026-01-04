@@ -73,16 +73,19 @@ if __name__ == '__main__':
             weight_decay=config.weight_decay,
             )
     elif config.optimizer == 'ADAM':
-        config.optimizer = optim.Adam(
+        config.optimizer = optim.AdamW(
             config.model.parameters(), 
             lr=config.lr,
             betas=(0.9, 0.999),
             weight_decay=config.weight_decay,
         )
     
-
+    if config.optimizer == 'ADAM':
+        # no scheduler for AdamW
+        config.scheduler = None
+    
     #create learning rate scheduler
-    if  'overfit' in config.exp_dir :
+    elif  'overfit' in config.exp_dir :
         config.scheduler = optim.lr_scheduler.MultiStepLR(
             config.optimizer,
             milestones=[config.max_epoch-1], # fix lr during overfitting

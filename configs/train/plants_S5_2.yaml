@@ -25,7 +25,7 @@ kpfcn_config:
   fine_feature_dim:  264
   coarse_match_radius: 0.024 # 0.05 for L: -3, 0.06 for L: -2, 0.1 for L: -1
   coarse_level: -2
-  max_grad_norm: 5.0
+  max_grad_norm: 1.0
   grad_clip_enabled: True
 #  fine_match_radius: 0.0375
 
@@ -87,10 +87,10 @@ pretrain: ''
 
 
 # optimiser:
-optimizer: SGD
+optimizer: ADAM
 max_epoch: 15
-lr: 0.001
-weight_decay: 0.000001
+lr: 0.0001
+weight_decay: 0.0001
 momentum: 0.93
 scheduler: ExpLR
 scheduler_gamma: 0.95
