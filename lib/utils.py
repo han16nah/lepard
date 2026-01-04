@@ -93,17 +93,45 @@ def square_distance(src, dst, normalised = False):
     return dist
     
 
-def validate_gradient(model):
-    """
-    Confirm all the gradients are non-nan and non-inf
-    """
+def validate_gradient(model, max_grad_norm=1e6):
+    """Check if gradients are valid (not NaN/Inf) and not exploding"""
     for name, param in model.named_parameters():
         if param.grad is not None:
-            if torch.any(torch.isnan(param.grad)):
+            grad = param.grad.data
+            
+            # Check for NaN
+            if torch.isnan(grad).any():
+                #print(f"NaN gradient in {name}")
                 return False
-            if torch.any(torch.isinf(param.grad)):
+            
+            # Check for Inf
+            if torch.isinf(grad).any():
+                #print(f"Inf gradient in {name}")
                 return False
+            
+            # Check for explosion
+            grad_norm = grad.norm().item()
+            if grad_norm > max_grad_norm:
+                #print(f"Exploding gradient in {name}: norm={grad_norm:.2e}")
+                return False
+    
     return True
+
+
+def check_gradients(model, threshold=1e6):
+    """Compute total gradient norm"""
+    total_norm = 0
+    for p in model.parameters():
+        if p.grad is not None:
+            param_norm = p.grad.data.norm(2)
+            total_norm += param_norm.item() ** 2
+            
+            # Debug: print large gradients
+            #if param_norm > threshold:
+            #    print(f"Large gradient in {p.shape}: norm={param_norm:.2e}")
+    
+    total_norm = total_norm ** 0.5
+    return total_norm
 
 
 def natural_key(string_):

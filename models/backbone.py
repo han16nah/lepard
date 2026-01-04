@@ -6,7 +6,9 @@ class KPFCN(nn.Module):
 
     def __init__(self, config):
         super(KPFCN, self).__init__()
-
+        self.config = config
+        self.gradient_hooks = []
+        
         ############
         # Parameters
         ############
@@ -63,6 +65,8 @@ class KPFCN(nn.Module):
         # bottleneck output & input layer
 
         self.coarse_out = nn.Conv1d(in_dim//2, config.coarse_feature_dim,  kernel_size=1, bias=True)
+        torch.nn.init.normal_(self.coarse_out.weight, std=0.01)
+        torch.nn.init.constant_(self.coarse_out.bias, 0.0)
         coarse_in_dim = config.coarse_feature_dim
         self.coarse_in = nn.Conv1d(coarse_in_dim, in_dim//2,  kernel_size=1, bias=True)
 
@@ -114,14 +118,14 @@ class KPFCN(nn.Module):
         fine_feature_dim =  config.fine_feature_dim
         self.fine_out = nn.Conv1d(out_dim, fine_feature_dim, kernel_size=1, bias=True)
 
+        # Debug flag
+        self.debug_mode = False
 
 
-
-    def forward(self, batch, phase = 'encode'):
-        # Get input features
-
+    def forward(self, batch, phase='encode', debug=False):
+        self.debug_mode = debug
+        
         if phase == 'coarse' :
-
             x = batch['features'].clone().detach()
             # 1. joint encoder part
             self.skip_x = []
@@ -141,23 +145,58 @@ class KPFCN(nn.Module):
 
                     return coarse_feats #[N,C2]
 
-        #
-        # elif phase == "fine":
-        #
-        #     coarse_feats = batch['coarse_feats']
-        #     coarse_feats = coarse_feats.transpose(0,1).unsqueeze(0)
-        #     coarse_feats = self.coarse_in(coarse_feats)
-        #     x = coarse_feats.transpose(1,2).squeeze(0)
-        #
-        #
-        #     for block_i, block_op in enumerate(self.decoder_blocks):
-        #         if block_i > 1  :
-        #             if block_i in self.decoder_concats:
-        #                 x = torch.cat([x, self.skip_x.pop()], dim=1)
-        #             x = block_op(x, batch)
-        #
-        #     fine_feats = x.transpose(0, 1).unsqueeze(0)  # [1, C, N]
-        #     fine_feats = self.fine_out(fine_feats)  # [1, C, N]
-        #     fine_feats = fine_feats.transpose(1, 2).squeeze(0)
-        #
-        #     return fine_feats
+
+    def enable_debug(self):
+        """Enable debug mode to raise exceptions on NaN/Inf"""
+        self.debug_mode = True
+
+    def disable_debug(self):
+        """Disable debug mode (only print warnings)"""
+        self.debug_mode = False
+
+    def register_gradient_hooks(self):
+        """Register hooks to track gradient flow"""
+        for name, module in self.named_modules():
+            if isinstance(module, (nn.Conv1d, nn.Linear, nn.BatchNorm1d)):
+                module.register_full_backward_hook(
+                    lambda module, grad_input, grad_output, name=name: 
+                    self._gradient_hook(module, grad_input, grad_output, name)
+                )
+    
+    def _gradient_hook(self, module, grad_input, grad_output, name):
+        """Hook to monitor gradients during backward pass"""
+        if grad_output is not None and grad_output[0] is not None:
+            grad_norm = grad_output[0].norm().item()
+            if grad_norm > 1000:  # Threshold for explosion
+                print(f"EXPLODING at {name}: grad_output norm = {grad_norm:.2e}")
+                if torch.isnan(grad_output[0]).any():
+                    print(f"   Contains NaN!")
+        
+        if grad_input is not None:
+            for i, g_in in enumerate(grad_input):
+                if g_in is not None:
+                    grad_in_norm = g_in.norm().item()
+                    if grad_in_norm > 1000:
+                        print(f"Backward through {name}: grad_input[{i}] norm = {grad_in_norm:.2e}")
+        
+        return None  # Don't modify gradients
+    
+    def check_nan_inf(self, x, name, block_idx=None):
+        """Check for NaN and Inf values in tensor"""
+        if torch.isnan(x).any():
+            print(f"⚠️ NaN detected in {name}" + (f" at block {block_idx}" if block_idx is not None else ""))
+            print(f"  Shape: {x.shape}, Min: {x.min():.6f}, Max: {x.max():.6f}, Mean: {x.mean():.6f}")
+            if self.debug_mode:
+                raise RuntimeError(f"NaN in {name}")
+        
+        if torch.isinf(x).any():
+            print(f"⚠️ Inf detected in {name}" + (f" at block {block_idx}" if block_idx is not None else ""))
+            print(f"  Shape: {x.shape}, Min: {x.min():.6f}, Max: {x.max():.6f}, Mean: {x.mean():.6f}")
+            if self.debug_mode:
+                raise RuntimeError(f"Inf in {name}")
+        
+        # Check for extreme values that might lead to NaN/Inf
+        if torch.abs(x).max() > 1e6:
+            print(f"⚠️ Extreme values in {name}: max|value| = {torch.abs(x).max():.2e}")
+        
+        return x
