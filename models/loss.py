@@ -111,7 +111,7 @@ class MatchMotionLoss(nn.Module):
         loss_info.update( { "focal_coarse": focal_coarse, "recall_coarse": recall, "precision_coarse": precision } )
         loss = loss + self.mat_w * focal_coarse
 
-        if recall > 0.01 and self.mot_w > 0:
+        if recall > 0.01 and self.mot_w > 0 and data.get("valid_motion", True):
             R_s2t_pred = data["R_s2t_pred"]
             t_s2t_pred = data["t_s2t_pred"]
 

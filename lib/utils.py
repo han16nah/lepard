@@ -117,6 +117,13 @@ def validate_gradient(model, max_grad_norm=1e6):
     
     return True
 
+def is_valid_sample(overlap, num_matches, epoch):
+    if epoch < 3:
+        return (overlap >= 0.10) and (num_matches >= 1000)
+    elif epoch < 6:
+        return (overlap >= 0.05) and (num_matches >= 300)
+    else:
+        return True
 
 def check_gradients(model, threshold=1e6):
     """Compute total gradient norm"""

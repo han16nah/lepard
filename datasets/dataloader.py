@@ -344,7 +344,7 @@ def collate_fn_4dmatch(list_data, config, neighborhood_limits ):
     sflow_list = []
     metric_index_list = [] #for feature matching recall computation
 
-    for ind, ( src_pcd, tgt_pcd, src_feats, tgt_feats, correspondences, rot, trn, s2t_flow, metric_index) in enumerate(list_data):
+    for ind, ( src_pcd, tgt_pcd, src_feats, tgt_feats, correspondences, overlap_ratio, num_matches, rot, trn, s2t_flow, metric_index) in enumerate(list_data):
 
         correspondences_list.append(correspondences )
         src_pcd_list.append(torch.from_numpy(src_pcd) )
@@ -549,6 +549,8 @@ def collate_fn_4dmatch(list_data, config, neighborhood_limits ):
     dict_inputs = {
         'src_pcd_list': src_pcd_list,
         'tgt_pcd_list': tgt_pcd_list,
+        'overlap': overlap_ratio,
+        'num_matches': num_matches,
         'points': input_points,
         'neighbors': input_neighbors,
         'pools': input_pools,

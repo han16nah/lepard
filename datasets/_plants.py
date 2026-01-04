@@ -76,6 +76,8 @@ class _Plants(Dataset):
             metric_index = entry['metric_index'].squeeze()
         else:
             metric_index = None
+        overlap_ratio = correspondences.shape[0] / src_pcd.shape[0]
+        num_matches = correspondences.shape[0]
         # Centering (like we do in DeformationPyramid)
         all_points = np.vstack([src_pcd, tgt_pcd])
         center = all_points.mean(axis=0, keepdims=True)
@@ -187,7 +189,7 @@ class _Plants(Dataset):
 
 
         #R * ( Ps + flow ) + t  = Pt
-        return src_pcd, tgt_pcd, src_feats, tgt_feats, correspondences, rot, trans, s2t_flow, metric_index
+        return src_pcd, tgt_pcd, src_feats, tgt_feats, correspondences, overlap_ratio, num_matches, rot, trans, s2t_flow, metric_index
 
 
 
