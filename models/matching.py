@@ -38,6 +38,11 @@ def log_optimal_transport(scores, alpha, iters, src_mask, tgt_mask ):
     return Z
 
 
+def assert_finite(x, name):
+    if not torch.isfinite(x).all():
+        raise RuntimeError(f"NaN/Inf in {name}")
+   
+
 class Matching(nn.Module):
 
     def __init__(self, config):
@@ -143,18 +148,50 @@ class Matching(nn.Module):
 
         src_feats, tgt_feats = map(lambda feat: feat / feat.shape[-1] ** .5,
                                    [src_feats, tgt_feats])
+        assert_finite(src_feats, "src_feats (before matching)")
+        assert_finite(tgt_feats, "tgt_feats (before matching)")
+
+        src_feats = torch.nan_to_num(src_feats, nan=0.0, posinf=0.0, neginf=0.0)
+        tgt_feats = torch.nan_to_num(tgt_feats, nan=0.0, posinf=0.0, neginf=0.0)
+
+        src_feats = src_feats / src_feats.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+        tgt_feats = tgt_feats / tgt_feats.norm(dim=-1, keepdim=True).clamp(min=1e-6)
 
         if self.match_type == "dual_softmax":
             # dual softmax matching
             sim_matrix_1 = torch.einsum("bsc,btc->bst", src_feats, tgt_feats) / self.temperature
+            sim_matrix_1 = sim_matrix_1.clamp(-50, 50)
 
-            if src_mask is not None:
-                sim_matrix_2 = sim_matrix_1.clone()
-                sim_matrix_1.masked_fill_(~src_mask[:, :, None], float('-inf'))
-                sim_matrix_2.masked_fill_(~tgt_mask[:, None, :], float('-inf'))
-                conf_matrix = F.softmax(sim_matrix_1, 1) * F.softmax(sim_matrix_2, 2)
-            else :
-                conf_matrix = F.softmax(sim_matrix_1, 1) * F.softmax(sim_matrix_1, 2)
+            B, S, T = sim_matrix_1.shape
+            device = sim_matrix_1.device
+            dtype = sim_matrix_1.dtype
+
+            # Handle empty point sets early (hard stop)
+            if S == 0 or T == 0:
+                    conf_matrix = torch.zeros(B, S, T, device=device, dtype=dtype)
+            # Masked dual-softmax
+            elif src_mask is not None:
+                # Check that every batch item has at least one valid src & tgt
+                valid_batch = src_mask.any(dim=1) & tgt_mask.any(dim=1)
+
+                if not valid_batch.all():
+                    conf_matrix = torch.zeros(B, S, T, device=device, dtype=dtype)
+                else:
+                    neg_inf = torch.finfo(dtype).min
+
+                    sim_src = sim_matrix_1.clone()
+                    sim_src.masked_fill_(~src_mask[:, :, None], neg_inf)
+                    p_src = F.softmax(sim_src, dim=1)
+
+                    sim_tgt = sim_matrix_1.clone()
+                    sim_tgt.masked_fill_(~tgt_mask[:, None, :], neg_inf)
+                    p_tgt = F.softmax(sim_tgt, dim=2)
+
+                    conf_matrix = p_src * p_tgt
+
+            # Unmasked dual-softmax
+            else:
+                conf_matrix = F.softmax(sim_matrix_1, dim=1) * F.softmax(sim_matrix_1, dim=2)
 
         elif self.match_type == "sinkhorn" :
             #optimal transport sinkhoron
