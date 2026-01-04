@@ -101,13 +101,13 @@ iter_size: 1
 
 #dataset:
 dataset: plants
-folder: S1
+folder: S5_2
 batch_size: 2
 num_workers: 8
 augment_noise: 0.005
 data_root: data_plants
 split: {
-  "train": S1-single/subsets/train,
-  "val": S1-single/subsets/val,
-  "test": S1-single/subsets/test
+  "train": S5/subsets/train2,
+  "val": S5/subsets/val2,
+  "test": S5/subsets/test
 }
