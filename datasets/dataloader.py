@@ -645,7 +645,9 @@ def get_dataloader(dataset, config, shuffle=True, neighborhood_limits=None):
         shuffle=shuffle,
         num_workers=config['num_workers'],
         collate_fn=partial(collate_fn, config=config['kpfcn_config'], neighborhood_limits=neighborhood_limits ),
-        drop_last=False
+        drop_last=False,
+        persistent_workers=False,
+        pin_memory=True
     )
 
     return dataloader, neighborhood_limits
