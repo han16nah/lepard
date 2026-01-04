@@ -76,6 +76,11 @@ class _Plants(Dataset):
             metric_index = entry['metric_index'].squeeze()
         else:
             metric_index = None
+        # Centering (like we do in DeformationPyramid)
+        all_points = np.vstack([src_pcd, tgt_pcd])
+        center = all_points.mean(axis=0, keepdims=True)
+        src_pcd = src_pcd - center
+        tgt_pcd = tgt_pcd - center
 
 
 
