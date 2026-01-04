@@ -10,7 +10,7 @@ from tensorboardX import SummaryWriter
 from tqdm import tqdm
 
 from lib.timer import AverageMeter
-from lib.utils import Logger, validate_gradient
+from lib.utils import Logger, validate_gradient, check_gradients
 from lib.tictok import Timers
 try:
     from torch.amp import autocast, GradScaler
@@ -44,6 +44,10 @@ class Trainer(object):
         if 'overfit' in self.config.exp_dir:
             self.verbose_freq = 1
         self.loss = args.desc_loss
+        self.grad_invalid_count = 0
+        self.grad_norm = None
+        self.max_grad_norm = getattr(self.config, 'max_grad_norm', 1.0)
+        self.grad_clip_enabled = getattr(self.config, 'grad_clip_enabled', True)
 
         self.best_loss = 1e5
         self.best_recall = -1e5
@@ -181,11 +185,25 @@ class Trainer(object):
             # if self.timers: self.timers.tic('run optimisation')
             if ((c_iter + 1) % self.iter_size == 0 and phase == 'train'):
                 gradient_valid = validate_gradient(self.model)
+                grad_norm = check_gradients(self.model)
+                self.grad_norm = grad_norm
                 if (gradient_valid):
+                    # For AMP: unscale gradients first
+                    self.scaler.unscale_(self.optimizer)
+
+                    # Clip gradients before optimizer step
+                    if self.grad_clip_enabled:
+                        torch.nn.utils.clip_grad_norm_(
+                            self.model.parameters(), 
+                            max_norm=self.max_grad_norm,
+                            norm_type=2
+                        )
+
                     self.scaler.step(self.optimizer)
                     self.scaler.update()
                 else:
                     self.logger.write('gradient not valid\n')
+                    self.grad_invalid_count += 1
                 self.optimizer.zero_grad(set_to_none=True)
             # if self.timers: self.timers.toc('run optimisation')
             ###############################
@@ -213,6 +231,7 @@ class Trainer(object):
                         for key, value in stats_meter.items():
                             message += f'{key}: {value.avg:.2f}\t'
                         self.logger.write(message + '\n')
+                        self.logger.write(f'Gradient invalid count: {self.grad_invalid_count}\tInvalid rate: {self.grad_invalid_count / (c_iter + 1):.4f}\tGrad Norm: {self.grad_norm}\n')
 
 
             if self.timers: self.timers.toc('one_iteration')
