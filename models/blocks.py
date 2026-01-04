@@ -157,8 +157,12 @@ class KPConv(nn.Module):
         self.offset_features = None
 
         # Initialize weights
-        self.weights = Parameter(torch.zeros((self.K, in_channels, out_channels), dtype=torch.float32),
-                                 requires_grad=True)
+        #self.weights = Parameter(torch.zeros((self.K, in_channels, out_channels), dtype=torch.float32),
+        #                         requires_grad=True)
+        self.weights = Parameter(torch.empty((self.K, in_channels, out_channels)),
+                         requires_grad=True)
+        nn.init.kaiming_normal_(self.weights, mode='fan_in', nonlinearity='relu')
+        self.weights.data *= 0.1  # Extra scaling for stability
 
         # Initiate weights for offsets
         if deformable:
