@@ -119,6 +119,11 @@ class Trainer(object):
                 data = self.model(inputs, timers=self.timers)  # [N1, C1], [N2, C2]
                 if self.timers: self.timers.toc('forward pass')
 
+                # NaN / Inf guard
+                conf = data.get('conf_matrix_pred', None)
+                if conf is not None and not torch.isfinite(conf).all():
+                    self.logger.write("⚠️ NaN/Inf in conf_matrix_pred — skipping batch")
+                    return None
 
                 if self.timers: self.timers.tic('compute loss')
                 loss_info = self.loss(data)
@@ -177,6 +182,10 @@ class Trainer(object):
 
             if self.timers: self.timers.tic('inference_one_batch')
             loss_info = self.inference_one_batch(inputs, phase)
+            if loss_info is None:
+                self.logger.write("Skipping batch due to NaNs in conf_matrix_pred")
+                self.optimizer.zero_grad(set_to_none=True)
+                continue  # skip this batch due to NaN/Inf
             if self.timers: self.timers.toc('inference_one_batch')
 
 
@@ -231,7 +240,7 @@ class Trainer(object):
                         for key, value in stats_meter.items():
                             message += f'{key}: {value.avg:.2f}\t'
                         self.logger.write(message + '\n')
-                        self.logger.write(f'Gradient invalid count: {self.grad_invalid_count}\tInvalid rate: {self.grad_invalid_count / (c_iter + 1):.4f}\tGrad Norm: {self.grad_norm}\n')
+                        self.logger.write(f'Gradient invalid count: {self.grad_invalid_count}\tInvalid rate: {self.grad_invalid_count / ((c_iter + 1)+num_iter*epoch):.4f}\tGrad Norm: {self.grad_norm}\n')
 
 
             if self.timers: self.timers.toc('one_iteration')
