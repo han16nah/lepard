@@ -127,12 +127,18 @@ class KPFCN(nn.Module):
         
         if phase == 'coarse' :
             x = batch['features'].clone().detach()
+            x = torch.clamp(x, -10.0, 10.0)
             # 1. joint encoder part
             self.skip_x = []
             for block_i, block_op in enumerate(self.encoder_blocks):
                 if block_i in self.encoder_skips:
                     self.skip_x.append(x)
-                x = block_op(x, batch)  # [N,C]
+                if block_i == 0:
+                    # disable AMP for first layer to avoid nan
+                    with torch.amp.autocast(enabled=False, device_type='cuda'):
+                        x = block_op(x, batch)
+                else:
+                    x = block_op(x, batch)  # [N,C]
 
             for block_i, block_op in enumerate(self.decoder_blocks):
                 if block_i in self.decoder_concats:
