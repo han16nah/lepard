@@ -16,14 +16,14 @@ class _Plants(Dataset):
     def __init__(self, config, split, data_augmentation=False):
         super(_Plants, self).__init__()
 
-        assert split in ['train','val','test']
+        assert split in ['train','val', 'val_full', 'test']
 
         if 'overfit' in config.exp_dir:
             d_slice = config.batch_size
         else :
             d_slice = None
 
-        self.entries = self.read_entries(  config.split[split] , config.data_root, d_slice=d_slice )
+        self.entries = self.read_entries(  config.split[split] , config.data_root, d_slice=40 )
 
         self.base_dir = config.data_root
         self.data_augmentation = data_augmentation
@@ -77,7 +77,6 @@ class _Plants(Dataset):
         else:
             metric_index = None
         overlap_ratio = correspondences.shape[0] / src_pcd.shape[0]
-        num_matches = correspondences.shape[0]
         # Centering (like we do in DeformationPyramid)
         all_points = np.vstack([src_pcd, tgt_pcd])
         center = all_points.mean(axis=0, keepdims=True)
@@ -189,7 +188,7 @@ class _Plants(Dataset):
 
 
         #R * ( Ps + flow ) + t  = Pt
-        return src_pcd, tgt_pcd, src_feats, tgt_feats, correspondences, overlap_ratio, num_matches, rot, trans, s2t_flow, metric_index
+        return src_pcd, tgt_pcd, src_feats, tgt_feats, correspondences, overlap_ratio, rot, trans, s2t_flow, metric_index
 
 
 

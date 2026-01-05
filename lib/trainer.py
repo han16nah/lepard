@@ -10,7 +10,7 @@ from tensorboardX import SummaryWriter
 from tqdm import tqdm
 
 from lib.timer import AverageMeter
-from lib.utils import Logger, validate_gradient, check_gradients, is_valid_sample
+from lib.utils import Logger, validate_gradient, check_gradients
 from lib.tictok import Timers
 try:
     from torch.amp import autocast, GradScaler
@@ -48,7 +48,6 @@ class Trainer(object):
         self.grad_norm = None
         self.max_grad_norm = getattr(self.config, 'max_grad_norm', 1.0)
         self.grad_clip_enabled = getattr(self.config, 'grad_clip_enabled', True)
-        self.skipped = 0
 
         self.best_loss = 1e5
         self.best_recall = -1e5
@@ -66,6 +65,11 @@ class Trainer(object):
         self.scaler = GradScaler()
 
         self.timers = args.timers
+        if args.val_loader_full is not None:
+            self.loader['val_full'] = args.val_loader_full
+        else:
+            self.loader['val_full'] = None
+
 
         with open(f'{args.snapshot_dir}/model', 'w') as f:
             f.write(str(self.model))
@@ -108,7 +112,7 @@ class Trainer(object):
         return self.optimizer.param_groups[group]['lr']
 
 
-    def inference_one_batch(self, inputs, phase, epoch):
+    def inference_one_batch(self, inputs, phase):
         assert phase in ['train', 'val', 'test']
         inputs ['phase'] = phase
 
@@ -130,16 +134,6 @@ class Trainer(object):
                 if self.timers: self.timers.tic('compute loss')
                 loss_info = self.loss(data)
                 true_loss = loss_info['loss']
-                valid = is_valid_sample(
-                    inputs["overlap"],
-                    inputs["num_matches"],
-                    epoch
-                )
-                if not valid:
-                    # zero loss but keep graph valid
-                    true_loss = true_loss * 0.0
-                self.skipped += int(not valid)
-                data["valid_motion"] = valid
                 scaled_loss = true_loss / self.iter_size
 
                 loss_info['true_loss'] = true_loss
@@ -193,7 +187,7 @@ class Trainer(object):
 
 
             if self.timers: self.timers.tic('inference_one_batch')
-            loss_info = self.inference_one_batch(inputs, phase, epoch)
+            loss_info = self.inference_one_batch(inputs, phase)
             if loss_info is None:
                 self.logger.write("Skipping batch due to NaNs in conf_matrix_pred")
                 self.optimizer.zero_grad(set_to_none=True)
@@ -253,7 +247,6 @@ class Trainer(object):
                             message += f'{key}: {value.avg:.2f}\t'
                         self.logger.write(message + '\n')
                         self.logger.write(f'Gradient invalid count: {self.grad_invalid_count}\tInvalid rate: {self.grad_invalid_count / ((c_iter + 1)+num_iter*epoch):.4f}\tGrad Norm: {self.grad_norm}\n')
-                        self.logger.write(f'Skip ratio: {self.skipped / ((c_iter + 1)+num_iter*epoch):.4f}\n')
 
 
             if self.timers: self.timers.toc('one_iteration')
@@ -263,6 +256,8 @@ class Trainer(object):
         if phase in ['val', 'test']:
             for key, value in stats_meter.items():
                 self.summary_writer.add_scalar(f'{phase}/{key}', value.avg, epoch)
+            if epoch % 2 == 0 and 'val_full' in self.loader and phase == 'val':
+                self.test_val_full()
 
         message = f'{phase} Epoch: {epoch}'
         for key, value in stats_meter.items():

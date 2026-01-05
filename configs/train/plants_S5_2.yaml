@@ -62,7 +62,7 @@ train_loss:
   pos_weight: 1.0
   neg_weight: 1.0
   motion_loss_type: L1
-  motion_weight: &motion_weight 0.1
+  motion_weight: &motion_weight 0.0
   match_weight: 1
   match_type: *match_type
   positioning_type: *positioning_type
@@ -107,7 +107,8 @@ num_workers: 8
 augment_noise: 0.005
 data_root: data_plants
 split: {
-  "train": S5/subsets/train2,
-  "val": S5/subsets/val2,
+  "train": S5/subsets/train_clean,
+  "val": S5/subsets/val_clean,
+  "val_full": S5/subsets/val_full,
   "test": S5/subsets/test
 }

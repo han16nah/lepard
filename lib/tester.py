@@ -294,7 +294,7 @@ class _PlantsTester(Trainer):
 
     def test(self):
 
-        for thr in [0.025, 0.05, 0.1]:
+        for thr in [0.01, 0.05, 0.1]:
             import time
             start = time.time()
             ir, fmr, nspl = self.test_thr(thr)
@@ -315,7 +315,10 @@ class _PlantsTester(Trainer):
         IR=0.
         NR_FMR=0.
 
-        inlier_thr = self.inlier_thr
+        try:
+            inlier_thr = self.inlier_thr
+        except AttributeError:
+            inlier_thr = 0.04
         recall_thr = inlier_thr
         if not inlier_thr == 0.04:
             print( "Warning: inlier threshold is set to ", inlier_thr)
@@ -371,6 +374,14 @@ class _PlantsTester(Trainer):
             if self.timers: self.timers.print()
 
             return IRate, NR_FMR, avg_matches
+    
+    def test_val_full(self):
+        if 'val_full' not in self.loader:
+            return
+
+        print("Running diagnostics on val_full")
+        self.loader['test'] = self.loader['val_full']  # temporary swap
+        self.test()                                    # reuse existing logic
 
 
 def get_trainer(config):

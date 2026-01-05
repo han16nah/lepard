@@ -102,9 +102,13 @@ if __name__ == '__main__':
     config.timers = Timers()
 
     # create dataset and dataloader
-    train_set, val_set, test_set = get_datasets(config)
+    train_set, val_set, val_set_full, test_set = get_datasets(config)
+    val_config = config.copy()
+    val_config['batch_size'] = 1  # for validation, use batch size 1
+    assert val_config['batch_size'] == 1
     config.train_loader, neighborhood_limits = get_dataloader(train_set,config,shuffle=True)
     config.val_loader, _ = get_dataloader(val_set, config, shuffle=False, neighborhood_limits=neighborhood_limits)
+    config.val_loader_full, _ = get_dataloader(val_set_full, val_config, shuffle=False, neighborhood_limits=neighborhood_limits)
     config.test_loader, _ = get_dataloader(test_set, config, shuffle=False, neighborhood_limits=neighborhood_limits)
     
     # config.desc_loss = MetricLoss(config)
@@ -113,5 +117,9 @@ if __name__ == '__main__':
     trainer = get_trainer(config)
     if(config.mode=='train'):
         trainer.train()
+    elif(config.mode=='val'):
+        if 'val_full' in config:
+            trainer.test_val_full()
+        trainer.test()
     else:
         trainer.test()

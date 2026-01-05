@@ -344,7 +344,7 @@ def collate_fn_4dmatch(list_data, config, neighborhood_limits ):
     sflow_list = []
     metric_index_list = [] #for feature matching recall computation
 
-    for ind, ( src_pcd, tgt_pcd, src_feats, tgt_feats, correspondences, overlap_ratio, num_matches, rot, trn, s2t_flow, metric_index) in enumerate(list_data):
+    for ind, ( src_pcd, tgt_pcd, src_feats, tgt_feats, correspondences, overlap_ratio, rot, trn, s2t_flow, metric_index) in enumerate(list_data):
 
         correspondences_list.append(correspondences )
         src_pcd_list.append(torch.from_numpy(src_pcd) )
@@ -550,7 +550,6 @@ def collate_fn_4dmatch(list_data, config, neighborhood_limits ):
         'src_pcd_list': src_pcd_list,
         'tgt_pcd_list': tgt_pcd_list,
         'overlap': overlap_ratio,
-        'num_matches': num_matches,
         'points': input_points,
         'neighbors': input_neighbors,
         'pools': input_pools,
@@ -609,6 +608,7 @@ def calibrate_neighbors(dataset, config, collate_fn, keep_ratio=0.8, samples_thr
 
 
 def get_datasets(config):
+    val_set_full = None
     if (config.dataset == '3dmatch'):
         train_set = _3DMatch(config, 'train', data_augmentation=True)
         val_set = _3DMatch(config, 'val', data_augmentation=False)
@@ -620,19 +620,19 @@ def get_datasets(config):
     elif(config.dataset == 'plants'):
         train_set = _Plants(config, 'train', data_augmentation=False)
         val_set = _Plants(config, 'val', data_augmentation=False)
+        val_set_full = _Plants(config, 'val_full', data_augmentation=False)
         test_set = _Plants(config, 'test', data_augmentation=False)
     else:
         raise NotImplementedError
 
-    return train_set, val_set, test_set
+    return train_set, val_set, val_set_full, test_set
 
 
 
 def get_dataloader(dataset, config, shuffle=True, neighborhood_limits=None):
-
-    if config.dataset=='4dmatch' or config.dataset=='plants':
+    if config['dataset']=='4dmatch' or config['dataset']=='plants':
         collate_fn = collate_fn_4dmatch
-    elif config.dataset == '3dmatch':
+    elif config['dataset'] == '3dmatch':
         collate_fn = collate_fn_3dmatch
     else:
         raise NotImplementedError()
