@@ -23,7 +23,7 @@ class _Plants(Dataset):
         else :
             d_slice = None
 
-        self.entries = self.read_entries(  config.split[split] , config.data_root, d_slice=40 )
+        self.entries = self.read_entries(  config.split[split] , config.data_root, d_slice=d_slice )
 
         self.base_dir = config.data_root
         self.data_augmentation = data_augmentation
