@@ -48,6 +48,9 @@ class Trainer(object):
         self.grad_norm = None
         self.max_grad_norm = getattr(self.config, 'max_grad_norm', 1.0)
         self.grad_clip_enabled = getattr(self.config, 'grad_clip_enabled', True)
+        self.epoch_unstable = False
+        self.last_stable_ckpt = None
+        self.lr_multiplier = 1.0
 
         self.best_loss = 1e5
         self.best_recall = -1e5
@@ -61,6 +64,7 @@ class Trainer(object):
             self.finetune = False
         if (args.pretrain != ''):
             self._load_pretrain(args.pretrain)
+            self.last_stable_ckpt = args.pretrain
 
 
         self.loader = dict()
@@ -92,6 +96,7 @@ class Trainer(object):
             state['scheduler'] = self.scheduler.state_dict()
         if name is None:
             filename = os.path.join(self.save_dir, f'model_{epoch}.pth')
+            self.last_stable_ckpt = filename
         else:
             filename = os.path.join(self.save_dir, f'model_{name}.pth')
         self.logger.write(f"Save model to {filename}\n")
@@ -198,6 +203,7 @@ class Trainer(object):
     def inference_one_epoch(self, epoch, phase):
         gc.collect()
         assert phase in ['train', 'val', 'test']
+        self.grad_invalid_count = 0
 
         # init stats meter
         stats_meter = None #  self.stats_meter()
@@ -209,12 +215,12 @@ class Trainer(object):
         self.optimizer.zero_grad()
         self.set_trainable_parameters(epoch)
 
-        # Rebuild optimizer ONLY when stage changes
+        # Rebuild optimizer ONLY when stage changes (or after instability)
         if self.config.finetune:
-            if epoch == self.start_epoch or epoch == self.start_epoch + 5 or epoch == self.start_epoch + 7:
-                # save snapshot when stage changes
-                self._snapshot(epoch)
+            if epoch == self.start_epoch or epoch == self.start_epoch + 5 or epoch == self.start_epoch + 7 or self.epoch_unstable:
                 self.build_optimizer()
+        
+        self.epoch_unstable = False
         for c_iter in tqdm(range(num_iter)):  # loop through this epoch
 
             if self.timers: self.timers.tic('one_iteration')
@@ -246,7 +252,7 @@ class Trainer(object):
             ###################################################
             # run optimisation
             # if self.timers: self.timers.tic('run optimisation')
-            if ((c_iter + 1) % self.iter_size == 0 and phase == 'train'):
+            if (max(c_iter, 1) % self.iter_size == 0 and phase == 'train'):
                 gradient_valid = validate_gradient(self.model)
                 grad_norm = check_gradients(self.model)
                 self.grad_norm = grad_norm
@@ -265,13 +271,11 @@ class Trainer(object):
                     self.scaler.step(self.optimizer)
                     self.scaler.update()
                 else:
-                    self.logger.write('gradient not valid\n')
+                    # self.logger.write('gradient not valid\n')
                     self.grad_invalid_count += 1
                 self.optimizer.zero_grad(set_to_none=True)
             # if self.timers: self.timers.toc('run optimisation')
             ###############################
-
-            torch.cuda.empty_cache()
 
             if stats_meter is None:
                 stats_meter = dict()
@@ -283,7 +287,7 @@ class Trainer(object):
                 stats_meter[key].update(value)
 
             if phase == 'train' :
-                if (c_iter + 1) % self.verbose_freq == 0 and self.verbose  :
+                if max(c_iter, 1) % self.verbose_freq == 0 and self.verbose  :
                     curr_iter = num_iter * (epoch - 1) + c_iter
                     for key, value in stats_meter.items():
                         self.summary_writer.add_scalar(f'{phase}/{key}', value.avg, curr_iter)
@@ -294,14 +298,26 @@ class Trainer(object):
                         for key, value in stats_meter.items():
                             message += f'{key}: {value.avg:.2f}\t'
                         self.logger.write(message + '\n')
-                        self.logger.write(f'Gradient invalid count: {self.grad_invalid_count}\tInvalid rate: {self.grad_invalid_count / ((c_iter + 1)+num_iter*epoch):.4f}\tGrad Norm: {self.grad_norm}\n')
-
+                        invalid_rate = self.grad_invalid_count / max(c_iter, 1)
+                        self.logger.write(f'Gradient invalid count: {self.grad_invalid_count}\tInvalid rate: {invalid_rate:.4f}\tGrad Norm: {self.grad_norm}\n')
+                        if invalid_rate > 0.5:
+                            self.logger.write('All gradients invalid, stopping this epoch early.\n')
+                            self.epoch_unstable = True
+                            break
 
             if self.timers: self.timers.toc('one_iteration')
 
+        if self.epoch_unstable:
+            self.logger.write("Reloading model from last snapshot due to instability.\n")
+            self._load_pretrain(self.last_stable_ckpt)
+
+            # and reduce learning rate
+            self.lr_multiplier *= 0.5
+            
+            self.build_optimizer()
 
         # report evaluation score at end of each epoch
-        if phase in ['val', 'test']:
+        elif phase in ['val', 'test']:
             for key, value in stats_meter.items():
                 self.summary_writer.add_scalar(f'{phase}/{key}', value.avg, epoch)
             if epoch % 3 == 0 and 'val_full' in self.loader and phase == 'val':
@@ -328,8 +344,8 @@ class Trainer(object):
         # hardcoded learning rates for finetuning
         self.optimizer = torch.optim.AdamW(
             [
-                {"params": backbone_params, "lr": 1e-5},
-                {"params": head_params, "lr": 1e-4},
+                {"params": backbone_params, "lr": 1e-5*self.lr_multiplier},
+                {"params": head_params, "lr": 1e-4*self.lr_multiplier},
             ],
             weight_decay=1e-4
         )
@@ -347,7 +363,7 @@ class Trainer(object):
                 stats_meter = self.inference_one_epoch(epoch, 'train')
                 if self.timers: self.timers.toc('run one epoch')
 
-            if self.scheduler is not None:
+            if self.scheduler is not None and not self.epoch_unstable:
                 self.scheduler.step()
 
 
@@ -359,12 +375,14 @@ class Trainer(object):
                 if self.timers: self.timers.print()
 
             else : # no validation step for overfitting
-
-                if self.config.do_valid:
+                
+                # validation and saving only when epoch not unstable
+                if self.config.do_valid and not self.epoch_unstable:
                     stats_meter = self.inference_one_epoch(epoch, 'val')
                     if stats_meter['loss'].avg < self.best_loss:
                         self.best_loss = stats_meter['loss'].avg
                         self._snapshot(epoch, 'best_loss')
+                    self._snapshot(epoch)
 
 
                 if self.timers: self.timers.print()

@@ -83,7 +83,7 @@ verbose: True
 verbose_freq: 1000
 do_valid: True
 do_test: True
-pretrain: '/mnt/x/Hannah/lepard_pretrained/pretrained/4dmatch/model_best_loss.pth'
+pretrain: '/mnt/x/Hannah/ndp_pretrained/lepard_weights.pth'
 finetune: True
 
 # optimiser:
@@ -101,7 +101,7 @@ iter_size: 1
 
 #dataset:
 dataset: plants
-folder: S1_2_finetune
+folder: S1_finetune
 batch_size: 2
 num_workers: 8
 augment_noise: 0.005
