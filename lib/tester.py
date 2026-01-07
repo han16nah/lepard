@@ -352,12 +352,12 @@ class _PlantsTester(Trainer):
                 try:
                     ir = MML.compute_inlier_ratio(match_pred, data, inlier_thr=inlier_thr, s2t_flow=data['coarse_flow'][0][None] )[0]
                 except IndexError:
-                    print( "Error for conf_threshold", conf_threshold)
+                    #print( "Error for conf_threshold", conf_threshold)
                     ir = None
                 try:
                     nrfmr = compute_nrfmr(match_pred, data, recall_thr=recall_thr)
                 except ValueError:
-                    print( "Error for conf_threshold", conf_threshold)
+                    #print( "Error for conf_threshold", conf_threshold)
                     nrfmr = None
 
                 if not (ir is None) and not (nrfmr is None):

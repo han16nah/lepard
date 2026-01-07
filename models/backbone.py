@@ -127,6 +127,9 @@ class KPFCN(nn.Module):
         
         if phase == 'coarse' :
             x = batch['features'].clone().detach()
+            if not torch.isfinite(x).all():
+                print("NaN/Inf in KPConv input features, applying nan_to_num")
+                x = torch.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
             x = torch.clamp(x, -10.0, 10.0)
             # 1. joint encoder part
             self.skip_x = []

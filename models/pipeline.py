@@ -40,12 +40,19 @@ class Pipeline(nn.Module):
         if self.timers: self.timers.tic('coarse_preprocess')
         src_feats, tgt_feats, s_pcd, t_pcd, src_mask, tgt_mask = self.split_feats (coarse_feats, data)
         data.update({ 's_pcd': s_pcd, 't_pcd': t_pcd })
+        assert torch.isfinite(src_feats).all(), "NaN/Inf after backbone"
         if self.timers: self.timers.toc('coarse_preprocess')
 
         if self.timers: self.timers.tic('coarse feature transformer')
+        #with torch.amp.autocast(enabled=False, device_type='cuda'):
         src_feats, tgt_feats, src_pe, tgt_pe = self.coarse_transformer(src_feats, tgt_feats, s_pcd, t_pcd, src_mask, tgt_mask, data, timers=timers)
         if self.timers: self.timers.toc('coarse feature transformer')
+        if not torch.isfinite(src_feats).all():
+            print("NaN/Inf in src_feats after transformer, applying nan_to_num")
+            src_feats = torch.nan_to_num(src_feats, 0.0, 0.0, 0.0)
+            tgt_feats = torch.nan_to_num(tgt_feats, 0.0, 0.0, 0.0)
 
+        assert torch.isfinite(src_feats).all(), "NaN/Inf after transformer"
         if self.timers: self.timers.tic('match feature coarse')
         conf_matrix_pred, coarse_match_pred = self.coarse_matching(src_feats, tgt_feats, src_pe, tgt_pe, src_mask, tgt_mask, data, pe_type = self.pe_type)
         data.update({'conf_matrix_pred': conf_matrix_pred, 'coarse_match_pred': coarse_match_pred })

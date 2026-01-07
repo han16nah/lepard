@@ -150,9 +150,12 @@ class Matching(nn.Module):
                                    [src_feats, tgt_feats])
         assert_finite(src_feats, "src_feats (before matching)")
         assert_finite(tgt_feats, "tgt_feats (before matching)")
-
-        src_feats = torch.nan_to_num(src_feats, nan=0.0, posinf=0.0, neginf=0.0)
-        tgt_feats = torch.nan_to_num(tgt_feats, nan=0.0, posinf=0.0, neginf=0.0)
+        if not torch.isfinite(src_feats).all():
+            print("NaN/Inf in src_feats before matching, applying nan_to_num")
+            src_feats = torch.nan_to_num(src_feats, nan=0.0, posinf=0.0, neginf=0.0)
+        if not torch.isfinite(tgt_feats).all():
+            print("NaN/Inf in tgt_feats before matching, applying nan_to_num")
+            tgt_feats = torch.nan_to_num(tgt_feats, nan=0.0, posinf=0.0, neginf=0.0)
 
         src_feats = src_feats / src_feats.norm(dim=-1, keepdim=True).clamp(min=1e-6)
         tgt_feats = tgt_feats / tgt_feats.norm(dim=-1, keepdim=True).clamp(min=1e-6)
