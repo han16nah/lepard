@@ -256,6 +256,18 @@ class KPConv(nn.Module):
 
         # Add a fake point in the last row for shadow neighbors
         s_pts = torch.cat((s_pts, torch.zeros_like(s_pts[:1, :]) + 1e6), 0)
+        shadow_idx = s_pts.shape[0] - 1
+
+        valid_neigh = neighb_inds < shadow_idx   # last index = shadow point
+        neigh_count = valid_neigh.sum(dim=1)
+        valid_mask = neigh_count >= 3
+
+        # keep neighb_inds shape, replace invalid queries by all-shadow neighbors
+        neighb_inds = neighb_inds.clone()
+        neighb_inds[~valid_mask] = shadow_idx
+        perc = 100.0 * (~valid_mask).float().mean().item()
+        if perc > 25.0:
+            print(f"% of points skipped in KPConv: {perc:.2f}%")
 
         # Get neighbor points [n_points, n_neighbors, dim]
         neighbors = s_pts[neighb_inds, :]
