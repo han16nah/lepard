@@ -212,6 +212,8 @@ class Trainer(object):
         # Rebuild optimizer ONLY when stage changes
         if self.config.finetune:
             if epoch == self.start_epoch or epoch == self.start_epoch + 5 or epoch == self.start_epoch + 7:
+                # save snapshot when stage changes
+                self._snapshot(epoch)
                 self.build_optimizer()
         for c_iter in tqdm(range(num_iter)):  # loop through this epoch
 
