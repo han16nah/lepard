@@ -78,9 +78,11 @@ class GeometryAttentionLayer(nn.Module):
 
         # attention
         a = torch.einsum("nlhd,nshd->nlsh", qw, kw)
+        NEG = -1e4
         if kv_mask is not None:
-            a.masked_fill_( q_mask[:, :, None, None] * (~kv_mask[:, None, :, None]), float('-inf'))
+            a.masked_fill_( q_mask[:, :, None, None] * (~kv_mask[:, None, :, None]), NEG)
         a =  a / qw.size(3) **0.5
+        a = a.clamp(-20, 20)
         a = torch.softmax(a, dim=2)
         o = torch.einsum("nlsh,nshd->nlhd", a, vw).contiguous()  # [N, L, (H, D)]
 
@@ -153,6 +155,9 @@ class RepositioningTransformer(nn.Module):
         self.timers = timers
 
         assert self.d_model == src_feat.size(2), "the feature number of src and transformer must be equal"
+        # normalize features
+        #src_feat = torch.nn.functional.normalize(src_feat, dim=-1, eps=1e-6)
+        #tgt_feat = torch.nn.functional.normalize(tgt_feat, dim=-1, eps=1e-6)
 
         if T is not None:
             R, t = T
