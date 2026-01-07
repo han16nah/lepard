@@ -55,8 +55,13 @@ class Trainer(object):
         self.logger = Logger(args.snapshot_dir)
         self.logger.write(f'#parameters {sum([x.nelement() for x in self.model.parameters()]) / 1000000.} M\n')
 
+        if args.finetune is True:
+            self.finetune = True
+        else:
+            self.finetune = False
         if (args.pretrain != ''):
             self._load_pretrain(args.pretrain)
+
 
         self.loader = dict()
         self.loader['train'] = args.train_loader
@@ -75,15 +80,16 @@ class Trainer(object):
             f.write(str(self.model))
         f.close()
 
-    def _snapshot(self, epoch, name=None):
+    def _snapshot(self, epoch, name=None): 
         state = {
             'epoch': epoch,
             'state_dict': self.model.state_dict(),
             'optimizer': self.optimizer.state_dict(),
-            'scheduler': self.scheduler.state_dict(),
             'best_loss': self.best_loss,
             'best_recall': self.best_recall
         }
+        if self.scheduler is not None:
+            state['scheduler'] = self.scheduler.state_dict()
         if name is None:
             filename = os.path.join(self.save_dir, f'model_{epoch}.pth')
         else:
@@ -94,23 +100,42 @@ class Trainer(object):
     def _load_pretrain(self, resume):
         print ("loading pretrained", resume)
         if os.path.isfile(resume):
-            state = torch.load(resume)
-            self.model.load_state_dict(state['state_dict'])
+            state = torch.load(resume, weights_only=True)
+            self.model.load_state_dict(state['state_dict'], strict=False)
             self.start_epoch = state['epoch']
-            self.scheduler.load_state_dict(state['scheduler'])
-            self.optimizer.load_state_dict(state['optimizer'])
-            self.best_loss = state['best_loss']
-            self.best_recall = state['best_recall']
+            self.max_epoch += self.start_epoch  # start counting from the loaded epoch
+            if not self.finetune:
+                self.scheduler.load_state_dict(state['scheduler'])
+                self.optimizer.load_state_dict(state['optimizer'])
+                self.best_loss = state['best_loss']
+                self.best_recall = state['best_recall']
 
             self.logger.write(f'Successfully load pretrained model from {resume}!\n')
-            self.logger.write(f'Current best loss {self.best_loss}\n')
-            self.logger.write(f'Current best recall {self.best_recall}\n')
+            if not self.finetune:
+                self.logger.write(f'Current best loss {self.best_loss}\n')
+                self.logger.write(f'Current best recall {self.best_recall}\n')
         else:
             raise ValueError(f"=> no checkpoint found at '{resume}'")
 
     def _get_lr(self, group=0):
         return self.optimizer.param_groups[group]['lr']
 
+    def set_trainable_parameters(self, epoch):
+        if self.config.pretrain == '' or not self.finetune:
+            return  # training from scratch/resume training: all parameters trainable
+
+        # Fine tuning: Stage 1: freeze entire backbone
+        if epoch < self.start_epoch + 3:
+            for p in self.model.backbone.parameters():
+                p.requires_grad = False
+
+        # Fine tuning: Stage 2: unfreeze backbone except first KPConv block
+        else:
+            for name, p in self.model.backbone.named_parameters():
+                if "encoder_blocks.0" in name:
+                    p.requires_grad = False
+                else:
+                    p.requires_grad = True
 
     def inference_one_batch(self, inputs, phase):
         assert phase in ['train', 'val', 'test']
@@ -167,6 +192,12 @@ class Trainer(object):
         
 
         self.optimizer.zero_grad()
+        self.set_trainable_parameters(epoch)
+
+        # Rebuild optimizer ONLY when stage changes
+        if self.config.finetune:
+            if epoch == self.start_epoch or epoch == self.start_epoch + 4:
+                self.build_optimizer()
         for c_iter in tqdm(range(num_iter)):  # loop through this epoch
 
             if self.timers: self.timers.tic('one_iteration')
@@ -256,7 +287,7 @@ class Trainer(object):
         if phase in ['val', 'test']:
             for key, value in stats_meter.items():
                 self.summary_writer.add_scalar(f'{phase}/{key}', value.avg, epoch)
-            if epoch % 2 == 0 and 'val_full' in self.loader and phase == 'val':
+            if epoch % 3 == 0 and 'val_full' in self.loader and phase == 'val':
                 self.test_val_full()
 
         message = f'{phase} Epoch: {epoch}'
@@ -266,18 +297,41 @@ class Trainer(object):
 
         return stats_meter
 
+    def build_optimizer(self):
+        backbone_params = []
+        head_params = []
 
+        for name, p in self.model.named_parameters():
+            if not p.requires_grad:
+                continue
+            if "backbone" in name:
+                backbone_params.append(p)
+            else:
+                head_params.append(p)
+        # hardcoded learning rates for finetuning
+        self.optimizer = torch.optim.AdamW(
+            [
+                {"params": backbone_params, "lr": 1e-4},
+                {"params": head_params, "lr": 1e-3},
+            ],
+            weight_decay=1e-4
+        )
+
+        self.scaler = GradScaler()
 
 
     def train(self):
         print('start training...')
+        print(f'Training for {self.max_epoch} epochs. Start from epoch {self.start_epoch}.')
         for epoch in range(self.start_epoch, self.max_epoch):
+            print(f'epoch {epoch}/{self.max_epoch} : ')
             with torch.autograd.set_detect_anomaly(False):  # True
                 if self.timers: self.timers.tic('run one epoch')
                 stats_meter = self.inference_one_epoch(epoch, 'train')
                 if self.timers: self.timers.toc('run one epoch')
 
-            self.scheduler.step()
+            if self.scheduler is not None:
+                self.scheduler.step()
 
 
             if  'overfit' in self.config.exp_dir :
