@@ -32,8 +32,8 @@ kpfcn_config:
 
 coarse_matching: &coarse_matching
   feature_dim: *coarse_feature_dim
-  confidence_threshold: 0.2
-  dsmax_temperature: 0.2
+  confidence_threshold: 0.001
+  dsmax_temperature: 0.1
   match_type: &match_type 'dual_softmax' #sinkhorn, dual_softmax
   entangled: *entangled
   skh_init_bin_score: 1.0
@@ -83,16 +83,17 @@ verbose: True
 verbose_freq: 1000
 do_valid: True
 do_test: True
-pretrain: ''
+pretrain: '/mnt/x/Hannah/lepard_pretrained/pretrained/4dmatch/model_best_loss.pth'
+finetune: True
 
 
 # optimiser:
 optimizer: ADAM
-max_epoch: 15
+max_epoch: 10
 lr: 0.0001
 weight_decay: 0.0001
 momentum: 0.93
-scheduler: ExpLR
+scheduler: None
 scheduler_gamma: 0.95
 scheduler_freq: 1
 iter_size: 1
@@ -101,7 +102,7 @@ iter_size: 1
 
 #dataset:
 dataset: plants
-folder: S5_2
+folder: S5_2_finetune
 batch_size: 2
 num_workers: 8
 augment_noise: 0.005
