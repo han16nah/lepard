@@ -125,17 +125,32 @@ class Trainer(object):
             return  # training from scratch/resume training: all parameters trainable
 
         # Fine tuning: Stage 1: freeze entire backbone
-        if epoch < self.start_epoch + 3:
+        if epoch <= self.start_epoch + 5:
             for p in self.model.backbone.parameters():
                 p.requires_grad = False
+        
+        # Stage 2: unfreeze decoder + last encoder block
+        elif epoch <= self.start_epoch + 7:
+            for name, p in self.model.backbone.named_parameters():
+                if (
+                    "decoder_blocks" in name or
+                    "encoder_blocks.3" in name   # last block (adjust index)
+                ):
+                    p.requires_grad = True
+                else:
+                    p.requires_grad = False
+            # modify gradient clipping
+            self.max_grad_norm = 0.5
 
-        # Fine tuning: Stage 2: unfreeze backbone except first KPConv block
+        # Stage 3: unfreeze all except first KPConv block
         else:
             for name, p in self.model.backbone.named_parameters():
                 if "encoder_blocks.0" in name:
                     p.requires_grad = False
                 else:
                     p.requires_grad = True
+            # modify gradient clipping
+            self.max_grad_norm = 0.3
 
     def inference_one_batch(self, inputs, phase):
         assert phase in ['train', 'val', 'test']
@@ -196,7 +211,7 @@ class Trainer(object):
 
         # Rebuild optimizer ONLY when stage changes
         if self.config.finetune:
-            if epoch == self.start_epoch or epoch == self.start_epoch + 4:
+            if epoch == self.start_epoch or epoch == self.start_epoch + 5 or epoch == self.start_epoch + 7:
                 self.build_optimizer()
         for c_iter in tqdm(range(num_iter)):  # loop through this epoch
 
@@ -311,8 +326,8 @@ class Trainer(object):
         # hardcoded learning rates for finetuning
         self.optimizer = torch.optim.AdamW(
             [
-                {"params": backbone_params, "lr": 1e-4},
-                {"params": head_params, "lr": 1e-3},
+                {"params": backbone_params, "lr": 1e-5},
+                {"params": head_params, "lr": 1e-4},
             ],
             weight_decay=1e-4
         )
