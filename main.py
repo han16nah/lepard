@@ -65,14 +65,15 @@ if __name__ == '__main__':
     # config.model = KPFCNN(config)
 
     # create optimizer 
-    if config.optimizer == 'SGD':
+    optimizer = config.optimizer.upper()
+    if optimizer == 'SGD':
         config.optimizer = optim.SGD(
             config.model.parameters(), 
             lr=config.lr,
             momentum=config.momentum,
             weight_decay=config.weight_decay,
             )
-    elif config.optimizer == 'ADAM':
+    elif optimizer == 'ADAM':
         config.optimizer = optim.AdamW(
             config.model.parameters(), 
             lr=config.lr,
@@ -80,23 +81,25 @@ if __name__ == '__main__':
             weight_decay=config.weight_decay,
         )
     
-    if config.optimizer == 'ADAM':
-        # no scheduler for AdamW
-        config.scheduler = None
     
-    #create learning rate scheduler
-    elif  'overfit' in config.exp_dir :
+    # create learning rate scheduler
+    if  'overfit' in config.exp_dir :
         config.scheduler = optim.lr_scheduler.MultiStepLR(
             config.optimizer,
             milestones=[config.max_epoch-1], # fix lr during overfitting
             gamma=0.1,
             last_epoch=-1)
 
-    else:
+    elif config.scheduler == 'ExpLR':
         config.scheduler = optim.lr_scheduler.ExponentialLR(
             config.optimizer,
             gamma=config.scheduler_gamma,
         )
+
+    elif optimizer == 'ADAM' or config.scheduler is None:
+        # no scheduler for AdamW
+        print("No learning rate scheduler")
+        config.scheduler = None
 
 
     config.timers = Timers()
