@@ -1,6 +1,9 @@
 import gc
 import os
 
+import psutil
+import sys
+
 import torch
 import torch.nn as nn
 import numpy as np
@@ -14,10 +17,10 @@ from lib.utils import Logger, validate_gradient, check_gradients
 from lib.tictok import Timers
 try:
     from torch.amp import autocast, GradScaler
-    autocast_kwargs = {'device_type': 'cuda', 'dtype': torch.float16}
+    autocast_kwargs = {'device_type': 'cuda', 'dtype': torch.bfloat16}
 except ImportError:
     from torch.cuda.amp import autocast, GradScaler
-    autocast_kwargs = {'dtype': torch.float16}
+    autocast_kwargs = {'dtype': torch.bfloat16}
 
 
 class Trainer(object):
@@ -202,6 +205,7 @@ class Trainer(object):
 
     def inference_one_epoch(self, epoch, phase):
         gc.collect()
+        torch.cuda.empty_cache()
         assert phase in ['train', 'val', 'test']
         self.grad_invalid_count = 0
 
@@ -212,7 +216,7 @@ class Trainer(object):
         c_loader_iter = self.loader[phase].__iter__()
         
 
-        self.optimizer.zero_grad()
+        self.optimizer.zero_grad(set_to_none=True)
         self.set_trainable_parameters(epoch)
 
         # Rebuild optimizer ONLY when stage changes (or after instability)
@@ -222,7 +226,16 @@ class Trainer(object):
         
         self.epoch_unstable = False
         for c_iter in tqdm(range(num_iter)):  # loop through this epoch
-
+            #print(f"{torch.cuda.memory_allocated() / torch.cuda.memory_reserved() * 100:.2f}% of reserved GPU memory used;"
+            #      f"{torch.cuda.max_memory_allocated()} bytes max allocated;"
+            #      f" {torch.cuda.memory_allocated()/ torch.cuda.max_memory_allocated():.2f}% of max")
+            #print(f"{psutil.virtual_memory().percent}% of system memory used.")
+            #if (torch.cuda.memory_allocated() / torch.cuda.memory_reserved() > 0.9):
+            #    print("Memory usage high, aborting.")
+            #    sys.exit(1)
+            #if psutil.virtual_memory().percent > 50:
+            #    print("System memory usage high, aborting.")
+            #    sys.exit(1)
             if self.timers: self.timers.tic('one_iteration')
 
             ##################################
@@ -252,7 +265,7 @@ class Trainer(object):
             ###################################################
             # run optimisation
             # if self.timers: self.timers.tic('run optimisation')
-            if (max(c_iter, 1) % self.iter_size == 0 and phase == 'train'):
+            if ((c_iter + 1) % self.iter_size == 0) and phase == 'train':
                 gradient_valid = validate_gradient(self.model)
                 grad_norm = check_gradients(self.model)
                 self.grad_norm = grad_norm
@@ -342,6 +355,7 @@ class Trainer(object):
             else:
                 head_params.append(p)
         # hardcoded learning rates for finetuning
+        print(f"Building optimizer with lr multiplier {self.lr_multiplier}")
         self.optimizer = torch.optim.AdamW(
             [
                 {"params": backbone_params, "lr": 1e-5*self.lr_multiplier},

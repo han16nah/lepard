@@ -93,6 +93,7 @@ def square_distance(src, dst, normalised = False):
     return dist
     
 
+@torch.no_grad()
 def validate_gradient(model, max_grad_norm=1e6):
     """Check if gradients are valid (not NaN/Inf) and not exploding"""
     for name, param in model.named_parameters():
@@ -118,6 +119,7 @@ def validate_gradient(model, max_grad_norm=1e6):
     return True
 
 
+@torch.no_grad()
 def check_gradients(model, threshold=1e6):
     """Compute total gradient norm"""
     total_norm = 0
