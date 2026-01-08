@@ -1,7 +1,7 @@
 import gc
 import os
 
-import psutil
+#import psutil
 import sys
 
 import torch
@@ -319,6 +319,8 @@ class Trainer(object):
                             break
 
             if self.timers: self.timers.toc('one_iteration')
+            del inputs
+            del loss_info
 
         if self.epoch_unstable:
             self.logger.write("Reloading model from last snapshot due to instability.\n")
