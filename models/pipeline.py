@@ -3,6 +3,7 @@ from models.backbone import KPFCN
 from models.transformer import RepositioningTransformer
 from models.matching import Matching
 from models.procrustes import SoftProcrustesLayer
+from torch.utils.checkpoint import checkpoint
 
 class Pipeline(nn.Module):
 
@@ -34,7 +35,8 @@ class Pipeline(nn.Module):
         self.timers = timers
 
         if self.timers: self.timers.tic('kpfcn backbone encode')
-        coarse_feats = self.backbone(data, phase="coarse")
+        coarse_feats = checkpoint(self.backbone, data, phase="coarse", use_reentrant=False)
+        # coarse_feats = self.backbone(data, phase="coarse")
         if self.timers: self.timers.toc('kpfcn backbone encode')
 
         if self.timers: self.timers.tic('coarse_preprocess')

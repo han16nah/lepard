@@ -205,7 +205,6 @@ class Trainer(object):
 
     def inference_one_epoch(self, epoch, phase):
         gc.collect()
-        torch.cuda.empty_cache()
         assert phase in ['train', 'val', 'test']
         self.grad_invalid_count = 0
 
@@ -226,16 +225,6 @@ class Trainer(object):
         
         self.epoch_unstable = False
         for c_iter in tqdm(range(num_iter)):  # loop through this epoch
-            #print(f"{torch.cuda.memory_allocated() / torch.cuda.memory_reserved() * 100:.2f}% of reserved GPU memory used;"
-            #      f"{torch.cuda.max_memory_allocated()} bytes max allocated;"
-            #      f" {torch.cuda.memory_allocated()/ torch.cuda.max_memory_allocated():.2f}% of max")
-            #print(f"{psutil.virtual_memory().percent}% of system memory used.")
-            #if (torch.cuda.memory_allocated() / torch.cuda.memory_reserved() > 0.9):
-            #    print("Memory usage high, aborting.")
-            #    sys.exit(1)
-            #if psutil.virtual_memory().percent > 50:
-            #    print("System memory usage high, aborting.")
-            #    sys.exit(1)
             if self.timers: self.timers.tic('one_iteration')
 
             ##################################
@@ -264,7 +253,7 @@ class Trainer(object):
 
             ###################################################
             # run optimisation
-            # if self.timers: self.timers.tic('run optimisation')
+            if self.timers: self.timers.tic('run optimisation')
             if ((c_iter + 1) % self.iter_size == 0) and phase == 'train':
                 gradient_valid = validate_gradient(self.model)
                 grad_norm = check_gradients(self.model)
@@ -287,7 +276,7 @@ class Trainer(object):
                     # self.logger.write('gradient not valid\n')
                     self.grad_invalid_count += 1
                 self.optimizer.zero_grad(set_to_none=True)
-            # if self.timers: self.timers.toc('run optimisation')
+            if self.timers: self.timers.toc('run optimisation')
             ###############################
 
             if stats_meter is None:
@@ -300,7 +289,7 @@ class Trainer(object):
                 stats_meter[key].update(value)
 
             if phase == 'train' :
-                if max(c_iter, 1) % self.verbose_freq == 0 and self.verbose  :
+                if (c_iter + 1) % self.verbose_freq == 0 and self.verbose  :
                     curr_iter = num_iter * (epoch - 1) + c_iter
                     for key, value in stats_meter.items():
                         self.summary_writer.add_scalar(f'{phase}/{key}', value.avg, curr_iter)
@@ -317,6 +306,8 @@ class Trainer(object):
                             self.logger.write('All gradients invalid, stopping this epoch early.\n')
                             self.epoch_unstable = True
                             break
+                    # clear cache at this interval to avoid OOM
+                    torch.cuda.empty_cache()
 
             if self.timers: self.timers.toc('one_iteration')
             del inputs
