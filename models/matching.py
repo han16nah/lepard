@@ -157,44 +157,30 @@ class Matching(nn.Module):
             print("NaN/Inf in tgt_feats before matching, applying nan_to_num")
             tgt_feats = torch.nan_to_num(tgt_feats, nan=0.0, posinf=0.0, neginf=0.0)
 
-        src_feats = src_feats / src_feats.norm(dim=-1, keepdim=True).clamp(min=1e-6)
-        tgt_feats = tgt_feats / tgt_feats.norm(dim=-1, keepdim=True).clamp(min=1e-6)
 
         if self.match_type == "dual_softmax":
-            # dual softmax matching
-            sim_matrix_1 = torch.einsum("bsc,btc->bst", src_feats, tgt_feats) / self.temperature
-            sim_matrix_1 = sim_matrix_1.clamp(-50, 50)
-
-            B, S, T = sim_matrix_1.shape
-            device = sim_matrix_1.device
-            dtype = sim_matrix_1.dtype
-
-            # Handle empty point sets early (hard stop)
-            if S == 0 or T == 0:
-                    conf_matrix = torch.zeros(B, S, T, device=device, dtype=dtype)
-            # Masked dual-softmax
-            elif src_mask is not None:
-                # Check that every batch item has at least one valid src & tgt
-                valid_batch = src_mask.any(dim=1) & tgt_mask.any(dim=1)
-
-                if not valid_batch.all():
-                    conf_matrix = torch.zeros(B, S, T, device=device, dtype=dtype)
-                else:
-                    neg_inf = torch.finfo(dtype).min
-
-                    sim_src = sim_matrix_1.clone()
-                    sim_src.masked_fill_(~src_mask[:, :, None], neg_inf)
-                    p_src = F.softmax(sim_src, dim=1)
-
-                    sim_tgt = sim_matrix_1.clone()
-                    sim_tgt.masked_fill_(~tgt_mask[:, None, :], neg_inf)
-                    p_tgt = F.softmax(sim_tgt, dim=2)
-
-                    conf_matrix = p_src * p_tgt
-
-            # Unmasked dual-softmax
+            sim_matrix = torch.einsum("bsc,btc->bst", src_feats, tgt_feats) / self.temperature
+            
+            if src_mask is not None:
+                # Create full 3D masks
+                src_mask_3d = src_mask[:, :, None].expand_as(sim_matrix)
+                tgt_mask_3d = tgt_mask[:, None, :].expand_as(sim_matrix)
+                
+                # Mask for softmax (invalid positions get -inf)
+                neg_inf = torch.finfo(sim_matrix.dtype).min
+                
+                # Softmax over source dimension (with masking)
+                sim_src = sim_matrix.masked_fill(~src_mask_3d, neg_inf)
+                p_src = F.softmax(sim_src, dim=1)
+                
+                # Softmax over target dimension (with masking)
+                sim_tgt = sim_matrix.masked_fill(~tgt_mask_3d, neg_inf)
+                p_tgt = F.softmax(sim_tgt, dim=2)
+                
+                conf_matrix = p_src * p_tgt
             else:
-                conf_matrix = F.softmax(sim_matrix_1, dim=1) * F.softmax(sim_matrix_1, dim=2)
+                conf_matrix = F.softmax(sim_matrix, dim=1) * F.softmax(sim_matrix, dim=2)
+                
 
         elif self.match_type == "sinkhorn" :
             #optimal transport sinkhoron
