@@ -61,13 +61,22 @@ class Trainer(object):
         self.logger = Logger(args.snapshot_dir)
         self.logger.write(f'#parameters {sum([x.nelement() for x in self.model.parameters()]) / 1000000.} M\n')
 
+        self.skip_epochs = 0
         if args.finetune is True:
             self.finetune = True
         else:
             self.finetune = False
         if (args.pretrain != ''):
-            self._load_pretrain(args.pretrain)
-            self.last_stable_ckpt = args.pretrain
+            # check if there is something in save_dir (checkpoints)
+            if os.path.exists(self.save_dir) and len(os.listdir(self.save_dir)) > 0:
+                print("Resuming training from existing checkpoints...")
+                checkpoints, epochs = zip(*[(f, int(f.split('_')[-1].split('.')[0])) for f in os.listdir(self.save_dir) if f.endswith('.pth') and not "best" in f])
+                max_epoch = max(epochs)
+                resume_ckpt = [f for f, e in zip(checkpoints, epochs) if e == max_epoch][0]
+                self._load_pretrain(os.path.join(self.save_dir, resume_ckpt), epoch=min(epochs))
+            else:
+                self._load_pretrain(args.pretrain)
+                self.last_stable_ckpt = args.pretrain
 
 
         self.loader = dict()
@@ -105,13 +114,19 @@ class Trainer(object):
         self.logger.write(f"Save model to {filename}\n")
         torch.save(state, filename, _use_new_zipfile_serialization=False)
 
-    def _load_pretrain(self, resume):
+    def _load_pretrain(self, resume, epoch=None):
         print ("loading pretrained", resume)
         if os.path.isfile(resume):
             state = torch.load(resume, weights_only=True)
             self.model.load_state_dict(state['state_dict'], strict=False)
-            self.start_epoch = state['epoch']
-            self.max_epoch += self.start_epoch  # start counting from the loaded epoch
+            if epoch is None:
+                self.start_epoch = state['epoch'] + 1
+                self.max_epoch += self.start_epoch  # start counting from the loaded epoch
+                self.skip_epochs = 0
+            else:
+                self.start_epoch = epoch
+                self.max_epoch += epoch  # start counting from the loaded epoch
+                self.skip_epochs = state['epoch'] + 1 - epoch
             if not self.finetune:
                 self.scheduler.load_state_dict(state['scheduler'])
                 self.optimizer.load_state_dict(state['optimizer'])
@@ -131,14 +146,15 @@ class Trainer(object):
     def set_trainable_parameters(self, epoch):
         if self.config.pretrain == '' or not self.finetune:
             return  # training from scratch/resume training: all parameters trainable
-
         # Fine tuning: Stage 1: freeze entire backbone
-        if epoch <= self.start_epoch + 5:
+        if epoch < self.start_epoch + 5:
+            print("Stage 1: freezing backbone")
             for p in self.model.backbone.parameters():
                 p.requires_grad = False
         
         # Stage 2: unfreeze decoder + last encoder block
-        elif epoch <= self.start_epoch + 7:
+        elif epoch < self.start_epoch + 7:
+            print("Stage 2: unfreezing decoder and last encoder block")
             for name, p in self.model.backbone.named_parameters():
                 if (
                     "decoder_blocks" in name or
@@ -148,17 +164,18 @@ class Trainer(object):
                 else:
                     p.requires_grad = False
             # modify gradient clipping
-            self.max_grad_norm = 0.5
+            #self.max_grad_norm = 0.5
 
         # Stage 3: unfreeze all except first KPConv block
         else:
+            print("Stage 3: unfreezing all except first encoder block")
             for name, p in self.model.backbone.named_parameters():
                 if "encoder_blocks.0" in name:
                     p.requires_grad = False
                 else:
                     p.requires_grad = True
             # modify gradient clipping
-            self.max_grad_norm = 0.3
+            #self.max_grad_norm = 0.3
 
     def inference_one_batch(self, inputs, phase):
         assert phase in ['train', 'val', 'test']
@@ -364,6 +381,9 @@ class Trainer(object):
         print('start training...')
         print(f'Training for {self.max_epoch} epochs. Start from epoch {self.start_epoch}.')
         for epoch in range(self.start_epoch, self.max_epoch):
+            if epoch < self.start_epoch + self.skip_epochs:
+                print(f'Skipping epoch {epoch} due to resuming from checkpoint...')
+                continue
             print(f'epoch {epoch}/{self.max_epoch} : ')
             with torch.autograd.set_detect_anomaly(False):  # True
                 if self.timers: self.timers.tic('run one epoch')
