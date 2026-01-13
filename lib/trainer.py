@@ -10,14 +10,14 @@ from tensorboardX import SummaryWriter
 from tqdm import tqdm
 
 from lib.timer import AverageMeter
-from lib.utils import Logger, validate_gradient
+from lib.utils import Logger, validate_and_check_gradients
 from lib.tictok import Timers
 try:
     from torch.amp import autocast, GradScaler
-    autocast_kwargs = {'device_type': 'cuda', 'dtype': torch.float16}
+    autocast_kwargs = {'device_type': 'cuda', 'dtype': torch.bfloat16}
 except ImportError:
     from torch.cuda.amp import autocast, GradScaler
-    autocast_kwargs = {'dtype': torch.float16}
+    autocast_kwargs = {'dtype': torch.bfloat16}
 
 
 class Trainer(object):
@@ -44,6 +44,8 @@ class Trainer(object):
         if 'overfit' in self.config.exp_dir:
             self.verbose_freq = 1
         self.loss = args.desc_loss
+        self.grad_invalid_count = 0
+        self.grad_norm = None
 
         self.best_loss = 1e5
         self.best_recall = -1e5
@@ -142,6 +144,7 @@ class Trainer(object):
 
     def inference_one_epoch(self, epoch, phase):
         gc.collect()
+        self.grad_invalid_count = 0
         assert phase in ['train', 'val', 'test']
 
         # init stats meter
@@ -180,12 +183,14 @@ class Trainer(object):
             # run optimisation
             # if self.timers: self.timers.tic('run optimisation')
             if ((c_iter + 1) % self.iter_size == 0 and phase == 'train'):
-                gradient_valid = validate_gradient(self.model)
+                gradient_valid, grad_norm = validate_and_check_gradients(self.model)
+                self.grad_norm = grad_norm
                 if (gradient_valid):
                     self.scaler.step(self.optimizer)
                     self.scaler.update()
                 else:
-                    self.logger.write('gradient not valid\n')
+                    # self.logger.write('gradient not valid\n')
+                    self.grad_invalid_count += 1
                 self.optimizer.zero_grad(set_to_none=True)
             # if self.timers: self.timers.toc('run optimisation')
             ###############################
@@ -213,6 +218,8 @@ class Trainer(object):
                         for key, value in stats_meter.items():
                             message += f'{key}: {value.avg:.2f}\t'
                         self.logger.write(message + '\n')
+                        invalid_rate = self.grad_invalid_count / max(c_iter, 1)
+                        self.logger.write(f'Gradient invalid count: {self.grad_invalid_count}\tInvalid rate: {invalid_rate:.4f}\tGrad Norm: {self.grad_norm}\n')
 
 
             if self.timers: self.timers.toc('one_iteration')
@@ -255,6 +262,7 @@ class Trainer(object):
 
                 if self.config.do_valid:
                     stats_meter = self.inference_one_epoch(epoch, 'val')
+                    self._snapshot(epoch)
                     if stats_meter['loss'].avg < self.best_loss:
                         self.best_loss = stats_meter['loss'].avg
                         self._snapshot(epoch, 'best_loss')

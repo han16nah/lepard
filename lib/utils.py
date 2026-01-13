@@ -93,6 +93,7 @@ def square_distance(src, dst, normalised = False):
     return dist
     
 
+@torch.no_grad()
 def validate_gradient(model):
     """
     Confirm all the gradients are non-nan and non-inf
@@ -104,6 +105,32 @@ def validate_gradient(model):
             if torch.any(torch.isinf(param.grad)):
                 return False
     return True
+
+
+def validate_and_check_gradients(model):
+    """Combined check to minimize synchronizations"""
+    with torch.no_grad():
+        total_norm = 0.0
+        has_invalid = False
+        
+        for p in model.parameters():
+            if p.grad is not None:
+                grad = p.grad.data
+                
+                # Check for invalid gradients (minimal sync)
+                if not has_invalid:
+                    # Only check until first invalid gradient found
+                    if torch.isnan(grad).any().item():  # Single sync
+                        has_invalid = True
+                    elif torch.isinf(grad).any().item():  # Only if no NaN
+                        has_invalid = True
+                
+                # Compute norm regardless (needed for logging)
+                param_norm = grad.norm(2)
+                total_norm += param_norm.item() ** 2  # Sync here
+        
+        total_norm = total_norm ** 0.5
+        return not has_invalid, total_norm
 
 
 def natural_key(string_):
