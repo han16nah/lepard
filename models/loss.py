@@ -80,7 +80,7 @@ class MatchMotionLoss(nn.Module):
     def ge_coarse_loss(self, data, loss_info, eval_metric=False):
 
 
-        if self.dataset == "4dmatch":
+        if self.dataset == "4dmatch" or self.dataset == "plants":
             s2t_flow = torch.zeros_like(data['s_pcd'])
             for i, cflow in enumerate(data['coarse_flow']):
                 s2t_flow[i][: len(cflow)] = cflow
@@ -116,7 +116,7 @@ class MatchMotionLoss(nn.Module):
             sflow_pred = src_pcd_wrapped_pred - data['s_pcd']
 
 
-            if self.dataset == '4dmatch':
+            if self.dataset == '4dmatch' or self.dataset == 'plants':  # (for plants dataset, rotation is identity and translation is zero)
                 spcd_deformed = data['s_pcd'] + s2t_flow
                 src_pcd_wrapped_gt = (torch.matmul(R_s2t_gt, spcd_deformed.transpose(1, 2)) + t_s2t_gt).transpose(1, 2)
             else : # 3dmatch
@@ -173,7 +173,7 @@ class MatchMotionLoss(nn.Module):
                     sflow_pred = src_pcd_wrapped_pred - data['s_pcd']
 
 
-                    if self.dataset == '4dmatch':
+                    if self.dataset == '4dmatch' or self.dataset == 'plants':  # (for plants dataset, rotation is identity and translation is zero):
                         spcd_deformed = data['s_pcd'] + s2t_flow
                         src_pcd_wrapped_gt = ( torch.matmul(R_s2t_gt, spcd_deformed.transpose(1, 2)) + t_s2t_gt).transpose(1, 2)
                     else:  # 3dmatch
