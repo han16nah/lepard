@@ -1,3 +1,4 @@
+from lib.benchmark_utils import correspondence_viz_open3d
 from lib.trainer import Trainer
 import torch
 from tqdm import tqdm
@@ -151,7 +152,9 @@ def compute_nrfmr( match_pred, data, recall_thr=0.04):
     s_pcd, t_pcd = data['s_pcd'], data['t_pcd']
 
     s_pcd_raw = data ['src_pcd_list']
+    t_pcd_raw = data ['tgt_pcd_list']
     sflow_list = data['sflow_list']
+    s2t_flow = data['coarse_flow'][0][None]
     metric_index_list = data['metric_index_list']
 
     batched_rot = data['batched_rot']  # B,3,3
@@ -163,7 +166,11 @@ def compute_nrfmr( match_pred, data, recall_thr=0.04):
     for i in range ( len(s_pcd_raw)):
 
         # get the metric points' transformed position
-        metric_index = metric_index_list[i]
+        if metric_index_list is None:
+            # all points are metric points
+            metric_index = np.arange( s_pcd_raw[i].shape[0] )
+        else:
+            metric_index = metric_index_list[i]
         sflow = sflow_list[i]
         s_pcd_raw_i = s_pcd_raw[i]
         metric_pcd = s_pcd_raw_i [ metric_index ]
@@ -171,32 +178,66 @@ def compute_nrfmr( match_pred, data, recall_thr=0.04):
         metric_pcd_deformed = metric_pcd + metric_sflow
         metric_pcd_wrapped_gt = ( torch.matmul( batched_rot[i], metric_pcd_deformed.T) + batched_trn[i] ).T
 
-
         # use the match prediction as the motion anchor
         match_pred_i = match_pred[ match_pred[:, 0] == i ]
         s_id , t_id = match_pred_i[:,1], match_pred_i[:,2]
         s_pcd_matched= s_pcd[i][s_id]
         t_pcd_matched= t_pcd[i][t_id]
+        # Transform source points: deform + rigid transform
+        s_pcd_deformed = s_pcd[i] + s2t_flow[i]  # Apply deformation
+        s_pcd_wrapped = (batched_rot[i] @ s_pcd_deformed.T + batched_trn[i]).T  # Apply rigid transform
+        
+        # Get transformed source points and target points
+        s_pcd_matched_transformed = s_pcd_wrapped[s_id]  # In target frame!
+        t_pcd_matched = t_pcd[i][t_id]  # Already in target frame
+        
+        # Compute inliers
+        inlier_thr = recall_thr  # 0.04 for 4DMatch
+        distances_sq = torch.sum((s_pcd_matched_transformed - t_pcd_matched)**2, dim=1)
+        inlier_mask = distances_sq < (inlier_thr**2)
+
+        corrs = np.stack([s_id.cpu().numpy(), t_id.cpu().numpy()], axis=0)
         motion_pred = t_pcd_matched - s_pcd_matched
         metric_motion_pred, valid_mask = blend_anchor_motion(
             metric_pcd.cpu().numpy(), s_pcd_matched.cpu().numpy(), motion_pred.cpu().numpy(), knn=3, search_radius=0.1)
         metric_pcd_wrapped_pred = metric_pcd + torch.from_numpy(metric_motion_pred).to(metric_pcd)
 
-        debug = False
+        debug = True
         if debug:
-            import mayavi.mlab as mlab
+            #import mayavi.mlab as mlab
+            import open3d as o3d
             c_red = (224. / 255., 0 / 255., 125 / 255.)
             c_pink = (224. / 255., 75. / 255., 232. / 255.)
             c_blue = (0. / 255., 0. / 255., 255. / 255.)
-            scale_factor = 0.013
             metric_pcd_wrapped_gt = metric_pcd_wrapped_gt.cpu()
             metric_pcd_wrapped_pred = metric_pcd_wrapped_pred.cpu()
             err = metric_pcd_wrapped_pred - metric_pcd_wrapped_gt
-            mlab.points3d(metric_pcd_wrapped_gt[:, 0], metric_pcd_wrapped_gt[:, 1], metric_pcd_wrapped_gt[:, 2], scale_factor=scale_factor, color=c_pink)
-            mlab.points3d(metric_pcd_wrapped_pred[ :, 0] , metric_pcd_wrapped_pred[ :, 1], metric_pcd_wrapped_pred[:,  2], scale_factor=scale_factor , color=c_blue)
-            mlab.quiver3d(metric_pcd_wrapped_gt[:, 0], metric_pcd_wrapped_gt[:, 1], metric_pcd_wrapped_gt[:, 2], err[:, 0], err[:, 1], err[:, 2],
-                          scale_factor=1, mode='2ddash', line_width=1.)
-            mlab.show()
+
+            gt_pcd = o3d.geometry.PointCloud()
+            gt_pcd.points = o3d.utility.Vector3dVector(metric_pcd_wrapped_gt.numpy())
+            # color pink
+            gt_pcd.paint_uniform_color(c_pink) 
+            pred_pcd = o3d.geometry.PointCloud()
+            pred_pcd.points = o3d.utility.Vector3dVector(metric_pcd_wrapped_pred.numpy())
+            pred_pcd.paint_uniform_color(c_blue)
+            lines = []
+            colors = []
+            for j in range(len(metric_pcd_wrapped_gt)):
+                lines.append( [j, j + len(metric_pcd_wrapped_gt)] )
+                colors.append( [1, 0, 0] )
+            line_set = o3d.geometry.LineSet()
+            line_set.points = o3d.utility.Vector3dVector( np.vstack( ( metric_pcd_wrapped_gt.numpy(), metric_pcd_wrapped_pred.numpy() ) ) )
+            line_set.lines = o3d.utility.Vector2iVector( lines )
+            line_set.colors = o3d.utility.Vector3dVector( colors )
+            o3d.visualization.draw_geometries( [gt_pcd, pred_pcd, line_set ] )
+
+            correspondence_viz_open3d(s_pcd_raw_i.cpu().numpy(), t_pcd_raw[i].cpu().numpy(), s_pcd[i], t_pcd[i], corrs, inlier_mask)
+
+            #mlab.points3d(metric_pcd_wrapped_gt[:, 0], metric_pcd_wrapped_gt[:, 1], metric_pcd_wrapped_gt[:, 2], scale_factor=scale_factor, color=c_pink)
+            #mlab.points3d(metric_pcd_wrapped_pred[ :, 0] , metric_pcd_wrapped_pred[ :, 1], metric_pcd_wrapped_pred[:,  2], scale_factor=scale_factor , color=c_blue)
+            #mlab.quiver3d(metric_pcd_wrapped_gt[:, 0], metric_pcd_wrapped_gt[:, 1], metric_pcd_wrapped_gt[:, 2], err[:, 0], err[:, 1], err[:, 2],
+            #              scale_factor=1, mode='2ddash', line_width=1.)
+            #mlab.show()
 
         dist = torch.sqrt( torch.sum( (metric_pcd_wrapped_pred - metric_pcd_wrapped_gt)**2, dim=1 ) )
 
@@ -209,7 +250,7 @@ def compute_nrfmr( match_pred, data, recall_thr=0.04):
 
 class _4DMatchTester(Trainer):
     """
-    3DMatch tester
+    4DMatch tester
     """
     def __init__(self,args):
         Trainer.__init__(self, args)
@@ -360,6 +401,9 @@ class _PlantsTester(Trainer):
 
                     n_sample += match_pred.shape[0]
 
+                    print("Sample size:", match_pred.shape[0])
+                    print("Inlier Rate:", ir)
+                    print("NR-FMR:", nrfmr)
 
             IRate = IR/len(self.loader['test'].dataset)
             NR_FMR = NR_FMR/len(self.loader['test'].dataset)
