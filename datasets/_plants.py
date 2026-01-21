@@ -13,6 +13,7 @@ from lib.utils import load_obj
 
 def plot_corr(s_pc, t_pc, corr, img_path):
     import open3d as o3d
+    import copy
     # for plotting, we need to arrange the points pertically
     points_combined = np.vstack([s_pc, t_pc])
     # and then modify the correspondences of the target points
@@ -28,19 +29,46 @@ def plot_corr(s_pc, t_pc, corr, img_path):
         points=o3d.utility.Vector3dVector(points_combined),
         lines=o3d.utility.Vector2iVector(correspondences_st_plotting))
     corres_lineset.paint_uniform_color([1, 0, 0])  # red
-    vis = o3d.visualization.Visualizer()
-    vis.create_window(visible=False)
-    vis.add_geometry(cloudf_src)
-    vis.add_geometry(cloudf_tgt)
-    vis.add_geometry(corres_lineset)
-    vis.update_geometry(cloudf_src)
-    vis.update_geometry(cloudf_tgt)
-    vis.update_geometry(corres_lineset)
-    vis.poll_events()
-    vis.update_renderer()
-    vis.capture_screen_image(img_path, do_render=True)
-    vis.destroy_window()
-    # o3d.visualization.draw_geometries([cloudf_src, cloudf_tgt, corres_lineset])
+    #vis = o3d.visualization.Visualizer()
+    #vis.create_window(visible=False)
+    #vis.add_geometry(cloudf_src)
+    #vis.add_geometry(cloudf_tgt)
+    #vis.add_geometry(corres_lineset)
+    #vis.update_geometry(cloudf_src)
+    #vis.update_geometry(cloudf_tgt)
+    #vis.update_geometry(corres_lineset)
+    #vis.poll_events()
+    #vis.update_renderer()
+    #vis.capture_screen_image(img_path, do_render=True)
+    #vis.destroy_window()
+    o3d.visualization.draw_geometries([cloudf_src, cloudf_tgt, corres_lineset])
+
+
+def plot_flow(s_pc, t_pc, s2t_flow, img_path):
+    import open3d as o3d
+    cloudf_src = o3d.geometry.PointCloud()
+    cloudf_src.points = o3d.utility.Vector3dVector(s_pc)
+    cloudf_src.paint_uniform_color([1, 0, 0])  # red
+    cloudf_tgt = o3d.geometry.PointCloud()
+    cloudf_tgt.points = o3d.utility.Vector3dVector(t_pc)
+    cloudf_tgt.paint_uniform_color([0, 0, 1])  # blue
+    corres_lineset = o3d.geometry.LineSet(
+        points=o3d.utility.Vector3dVector(np.vstack([s_pc, s_pc + s2t_flow])),
+        lines=o3d.utility.Vector2iVector(np.arange(2 * s2t_flow.shape[0]).reshape((2, -1)).T))
+    corres_lineset.paint_uniform_color([1, 0, 0])  # red
+    #vis = o3d.visualization.Visualizer()
+    #vis.create_window(visible=False)
+    #vis.add_geometry(cloudf_src)
+    #vis.add_geometry(cloudf_tgt)
+    #vis.add_geometry(corres_lineset)
+    #vis.update_geometry(cloudf_src)
+    #vis.update_geometry(cloudf_tgt)
+    #vis.update_geometry(corres_lineset)
+    #vis.poll_events()
+    #vis.update_renderer()
+    #vis.capture_screen_image(img_path, do_render=True)
+    #vis.destroy_window()
+    o3d.visualization.draw_geometries([cloudf_src, cloudf_tgt, corres_lineset])
 
 
 class _Plants(Dataset):
@@ -148,6 +176,7 @@ class _Plants(Dataset):
             assert correspondences.shape[0] > 0, "Correspondences are empty after downsampling."
             assert s2t_flow.shape[0] > 0, "Scene flow is empty after downsampling."
             plot_corr(src_pcd, tgt_pcd, correspondences, "debug_downsampled_corr.png")
+            plot_flow(src_pcd, tgt_pcd, s2t_flow, "debug_downsampled_flow.png")
 
 
         if debug:
