@@ -91,7 +91,7 @@ class _Plants(Dataset):
 
         self.rot_factor = 1.
         self.augment_noise = config.augment_noise
-        self.max_points = 50_000
+        self.max_points = 40_000
 
         self.overlap_radius = 0.0375
 
@@ -219,17 +219,17 @@ class _Plants(Dataset):
 
         # add gaussian noise
         if self.data_augmentation:
-            # rotate the point cloud
-            euler_ab = np.random.rand(3) * np.pi * 2 / self.rot_factor  # anglez, angley, anglex
-            rot_ab = Rotation.from_euler('zyx', euler_ab).as_matrix()
-            if (np.random.rand(1)[0] > 0.5):
-                src_pcd = np.matmul(rot_ab, src_pcd.T).T
-                src_pcd_deformed = np.matmul(rot_ab, src_pcd_deformed.T).T
-                rot = np.matmul(rot, rot_ab.T)
-            else:
-                tgt_pcd = np.matmul(rot_ab, tgt_pcd.T).T
-                rot = np.matmul(rot_ab, rot)
-                trans = np.matmul(rot_ab, trans)
+            # rotate the point cloud - skip this for plants dataset
+            #euler_ab = np.random.rand(3) * np.pi * 2 / self.rot_factor  # anglez, angley, anglex
+            #rot_ab = Rotation.from_euler('zyx', euler_ab).as_matrix()
+            #if (np.random.rand(1)[0] > 0.5):
+            #    src_pcd = np.matmul(rot_ab, src_pcd.T).T
+            #    src_pcd_deformed = np.matmul(rot_ab, src_pcd_deformed.T).T
+            #    rot = np.matmul(rot, rot_ab.T)
+            #else:
+            #    tgt_pcd = np.matmul(rot_ab, tgt_pcd.T).T
+            #    rot = np.matmul(rot_ab, rot)
+            #    trans = np.matmul(rot_ab, trans)
 
             src_pcd += (np.random.rand(src_pcd.shape[0], 3) - 0.5) * self.augment_noise
             tgt_pcd += (np.random.rand(tgt_pcd.shape[0], 3) - 0.5) * self.augment_noise
