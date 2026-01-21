@@ -11,6 +11,38 @@ from lib.benchmark_utils import to_o3d_pcd, to_tsfm, KDTree_corr, get_correspond
 from lib.utils import load_obj
 
 
+def plot_corr(s_pc, t_pc, corr, img_path):
+    import open3d as o3d
+    # for plotting, we need to arrange the points pertically
+    points_combined = np.vstack([s_pc, t_pc])
+    # and then modify the correspondences of the target points
+    correspondences_st_plotting = copy.deepcopy(corr)
+    correspondences_st_plotting[:, 1] += s_pc.shape[0]  # shift target indices by the number of source points
+    cloudf_src = o3d.geometry.PointCloud()
+    cloudf_src.points = o3d.utility.Vector3dVector(s_pc)
+    cloudf_src.paint_uniform_color([1, 0, 0])  # red
+    cloudf_tgt = o3d.geometry.PointCloud()
+    cloudf_tgt.points = o3d.utility.Vector3dVector(t_pc)
+    cloudf_tgt.paint_uniform_color([0, 0, 1])  # blue
+    corres_lineset = o3d.geometry.LineSet(
+        points=o3d.utility.Vector3dVector(points_combined),
+        lines=o3d.utility.Vector2iVector(correspondences_st_plotting))
+    corres_lineset.paint_uniform_color([1, 0, 0])  # red
+    vis = o3d.visualization.Visualizer()
+    vis.create_window(visible=False)
+    vis.add_geometry(cloudf_src)
+    vis.add_geometry(cloudf_tgt)
+    vis.add_geometry(corres_lineset)
+    vis.update_geometry(cloudf_src)
+    vis.update_geometry(cloudf_tgt)
+    vis.update_geometry(corres_lineset)
+    vis.poll_events()
+    vis.update_renderer()
+    vis.capture_screen_image(img_path, do_render=True)
+    vis.destroy_window()
+    # o3d.visualization.draw_geometries([cloudf_src, cloudf_tgt, corres_lineset])
+
+
 class _Plants(Dataset):
 
     def __init__(self, config, split, data_augmentation=False):
@@ -31,7 +63,7 @@ class _Plants(Dataset):
 
         self.rot_factor = 1.
         self.augment_noise = config.augment_noise
-        self.max_points = 200_000
+        self.max_points = 50_000
 
         self.overlap_radius = 0.0375
 
@@ -108,12 +140,15 @@ class _Plants(Dataset):
         
         src_pcd_deformed = src_pcd + s2t_flow
         if downsampled:
+            # might not be needed to recompute correspondences, but just to be safe
             correspondences = find_new_corr(correspondences, sub_idx_src, sub_idx_tgt)
             # assert that none of the important variables are empty
             assert src_pcd.shape[0] > 0, "Source point cloud is empty after downsampling."
             assert tgt_pcd.shape[0] > 0, "Target point cloud is empty after downsampling."
             assert correspondences.shape[0] > 0, "Correspondences are empty after downsampling."
             assert s2t_flow.shape[0] > 0, "Scene flow is empty after downsampling."
+            plot_corr(src_pcd, tgt_pcd, correspondences, "debug_downsampled_corr.png")
+
 
         if debug:
             #import mayavi.mlab as mlab
