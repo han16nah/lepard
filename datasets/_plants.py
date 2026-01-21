@@ -96,7 +96,7 @@ class _Plants(Dataset):
         self.overlap_radius = 0.0375
 
         self.cache = OrderedDict()
-        self.cache_size = 30_000
+        self.cache_size = 1_000
 
 
     def read_entries (self, split, data_root, d_slice=None, shuffle= False):
@@ -148,35 +148,48 @@ class _Plants(Dataset):
         #    tgt_pcd = tgt_pcd[idx]
 
         downsampled = False
+        src_mask = None
+        tgt_mask = None
         # if we get too many points, we do some downsampling
         if src_pcd.shape[0] > self.max_points:
-            print("Downsampling...")
+            print("Downsampling source...")
             downsampled = True
-            pts_max = min(src_pcd.shape[0], tgt_pcd.shape[0])
-            sub_idx_src = np.random.permutation(pts_max)[:self.max_points]
-            src_pcd = src_pcd[sub_idx_src]
-            s2t_flow = s2t_flow[sub_idx_src]
-            # indices of target - no filtering
-            sub_idx_tgt = np.arange(tgt_pcd.shape[0])
+            # Create boolean mask for source points
+            src_mask = np.zeros(src_pcd.shape[0], dtype=bool)
+            sub_idx_src = np.random.choice(src_pcd.shape[0], self.max_points, replace=False)
+            src_mask[sub_idx_src] = True
+            
+            src_pcd = src_pcd[src_mask]
+            s2t_flow = s2t_flow[src_mask]
+            
+            # For target, keep all points initially
+            tgt_mask = np.ones(tgt_pcd.shape[0], dtype=bool)
 
-        if (tgt_pcd.shape[0] > self.max_points):
-            print("Downsampling...")
-            sub_idx_tgt = np.random.permutation(tgt_pcd.shape[0])[:self.max_points]
-            tgt_pcd = tgt_pcd[sub_idx_tgt]
+        if tgt_pcd.shape[0] > self.max_points:
+            print("Downsampling target...")
+            # Create boolean mask for target points
+            tgt_mask = np.zeros(tgt_pcd.shape[0], dtype=bool)
+            sub_idx_tgt = np.random.choice(tgt_pcd.shape[0], self.max_points, replace=False)
+            tgt_mask[sub_idx_tgt] = True
+            
+            tgt_pcd = tgt_pcd[tgt_mask]
+            
+            # If source wasn't downsampled, create full mask for it
             if not downsampled:
-                sub_idx_src = np.arange(src_pcd.shape[0])
+                src_mask = np.ones(src_pcd.shape[0], dtype=bool)
+                downsampled = True
         
         src_pcd_deformed = src_pcd + s2t_flow
         if downsampled:
             # might not be needed to recompute correspondences, but just to be safe
-            correspondences = find_new_corr(correspondences, sub_idx_src, sub_idx_tgt)
+            correspondences = find_new_corr(correspondences, src_mask, tgt_mask)
             # assert that none of the important variables are empty
             assert src_pcd.shape[0] > 0, "Source point cloud is empty after downsampling."
             assert tgt_pcd.shape[0] > 0, "Target point cloud is empty after downsampling."
             assert correspondences.shape[0] > 0, "Correspondences are empty after downsampling."
             assert s2t_flow.shape[0] > 0, "Scene flow is empty after downsampling."
-            plot_corr(src_pcd, tgt_pcd, correspondences, "debug_downsampled_corr.png")
-            plot_flow(src_pcd, tgt_pcd, s2t_flow, "debug_downsampled_flow.png")
+            #plot_corr(src_pcd, tgt_pcd, correspondences, "debug_downsampled_corr.png")
+            #plot_flow(src_pcd, tgt_pcd, s2t_flow, "debug_downsampled_flow.png")
 
 
         if debug:
